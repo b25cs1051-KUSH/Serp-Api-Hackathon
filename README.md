@@ -6,7 +6,6 @@
 [![SerpApi](https://img.shields.io/badge/powered%20by-SerpApi-green)](https://serpapi.com)
 
 ---
-
 ## What Problem Does This Solve?
 
 When you build an AI agent that calls SerpApi, it often searches for the same or very similar things multiple times:
@@ -20,7 +19,6 @@ These two queries mean the **same thing**. Without a cache, you pay twice and wa
 With `serpapi-cache`, the second call is **free and instant**.
 
 ---
-
 ## How It Works — Simple Explanation
 
 Think of it like this: every search query gets converted into a "fingerprint" (a list of 384 numbers that captures the *meaning* of the query). When you search again, we compare the new fingerprint against all stored fingerprints. If they're close enough (above a similarity threshold), we return the saved result instead of calling SerpApi.
@@ -41,7 +39,6 @@ Score of 1.0 = identical meaning. Score of 0.0 = completely unrelated.
 We set the bar at **0.80** (data-driven from testing — not a guess).
 
 ---
-
 ## What Was Built
 
 ### Core Library: `serpapi_cache/`
@@ -60,7 +57,6 @@ We set the bar at **0.80** (data-driven from testing — not a guess).
 | `tune_threshold.py` | Prints similarity scores for query pairs to pick the right threshold |
 
 ---
-
 ## The Two Backends — When to Use Which
 
 ### InMemoryBackend (development & testing)
@@ -91,7 +87,6 @@ cache = SerpApiCache(
 ```
 
 ---
-
 ## How SerpApi Fits In
 
 `SerpApiCache` is a **drop-in replacement** for `serpapi.Client.search()`.
@@ -117,7 +112,6 @@ Internally, on every `cache.search()` call:
 4. Score < 0.80 → call SerpApi normally → store the result + embedding for next time
 
 ---
-
 ## Verified Test Results
 
 All results from real test runs on this machine.
@@ -147,7 +141,6 @@ Threshold of `0.80` sits cleanly in between — zero false positives.
 - **Stage 3** — Real SerpApi: Live API call → cached → 710x speedup confirmed
 
 ---
-
 ## Project Structure
 
 ```
@@ -163,7 +156,7 @@ serpapi-cache/
 │   └── tune_threshold.py       ← similarity score printer for threshold tuning
 │
 ├── docs/
-│   └── judge_notes.md          ← judge background research
+|    ├──
 │
 ├── .env                        ← SERP_API_KEY (never committed — in .gitignore)
 ├── .gitignore                  ← ignores .env, __pycache__, build artifacts
@@ -173,13 +166,12 @@ serpapi-cache/
 ```
 
 ---
-
 ## Installation & Quick Start
 
 ```bash
 # 1. Clone and install
 git clone <your-repo>
-cd serpapi-cache
+cd Serp-Api-Hackathon
 pip install -r requirements.txt
 
 # 2. Set your API key
@@ -195,7 +187,6 @@ python scripts/tune_threshold.py
 ```
 
 ---
-
 ## Key Design Decisions & Why
 
 ### Why `all-MiniLM-L6-v2`?
@@ -216,52 +207,9 @@ python scripts/tune_threshold.py
 - Same interface — swap `InMemoryBackend()` → `RedisBackend()` and nothing else changes
 - InMemory for dev/demos, Redis for production — users pick based on their needs
 
----
-
-## Potential Breaking Points — Know Before Judges Ask
-
-### 1. Embedding model version drift
-**What:** If `sentence-transformers` library updates `all-MiniLM-L6-v2`, embedding values may shift.
-**Impact:** Old cached embeddings won't match new embeddings → cache miss storm.
-**Fix:** Pin version in `requirements.txt` (already done). Flush Redis after any upgrade.
-
-### 2. Redis crashes / not running
-**What:** If Redis stops, `RedisBackend` throws `ConnectionError` immediately.
-**Impact:** Entire agent crashes.
-**Fix:** Use try/except to fall back to `InMemoryBackend`:
-```python
-try:
-    backend = RedisBackend(host="localhost")
-except Exception:
-    backend = InMemoryBackend()  # graceful degradation
-```
-
-### 3. SerpApi JSON schema changes
-**What:** SerpApi occasionally changes response field names (e.g., `organic_results` → something else).
-**Impact:** Code reading specific fields breaks. Cache itself is unaffected (stores raw JSON).
-**Fix:** Always use `.get("field", default)` when reading SerpApi results downstream.
-
-### 4. Memory growth without TTL
-**What:** `InMemoryBackend` with `default_ttl=0` (never expire) accumulates entries forever.
-**Impact:** Memory leak in long-running agents.
-**Fix:** Always set a `default_ttl`. Default in this library is 3600s (1 hour).
-
-### 5. Windows Redis not persistent across reboots
-**What:** On Windows, `redis-server.exe` started manually dies on reboot.
-**Impact:** Cache empty after restart.
-**Fix:** Register as Windows Service: `redis-server --service-install`, or use Docker.
-
-### 6. First-run model download delay
-**What:** First time `SerpApiCache` initializes, it downloads ~90MB model from HuggingFace.
-**Impact:** 30-60 second delay on first ever run in a fresh environment.
-**Fix:** Pre-download in setup/Dockerfile:
-```bash
-python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-```
 
 ---
-
-## Business Value — Why This Matters
+## Business Value — Why This Matters?
 
 A team running an AI agent that makes 1000 SerpApi searches/day:
 
@@ -274,21 +222,6 @@ A team running an AI agent that makes 1000 SerpApi searches/day:
 | Response time | 7s average | 0.01s on hits |
 
 ---
-
-## How This Fits the Hackathon
-
-**Track:** Open-Source Integrations
-
-**SerpApi role:** `serpapi-cache` wraps `serpapi.Client.search()` directly. Every cache miss triggers a real SerpApi call. The library exists *because of* SerpApi — SerpApi is the core engine, not a bolt-on.
-
-**Judge alignment:**
-- **Josef:** Clean repo, `pyproject.toml`, `.gitignore`, typed interfaces, comprehensive README — production open-source quality
-- **Pranav:** Directly saves users' SerpApi credits — clear, quantifiable business value
-- **Tomas:** Foundation for the distiller pipeline — clean LLM context starts with clean, non-redundant data
-- **Adarsh:** `pip install`, 3 lines to use, works out of the box — ships fast, practical
-
----
-
 ## What's Next (Roadmap)
 
 - [ ] `serpapi_distiller/` — strip noisy SerpApi JSON into clean Markdown for LLMs
@@ -299,7 +232,6 @@ A team running an AI agent that makes 1000 SerpApi searches/day:
 - [ ] Auto-fallback: Redis → InMemory on connection failure
 
 ---
-
 ## License
 
 MIT — free to use, modify, and distribute.
