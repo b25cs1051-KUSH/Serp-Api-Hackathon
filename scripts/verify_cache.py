@@ -2,9 +2,9 @@
 verify_cache.py — Full verification suite for SerpApiCache.
 
 Runs 3 stages:
-  Stage 1: In-Memory backend (no Redis needed) — proves core logic works
-  Stage 2: Redis backend — proves production path works
-  Stage 3: Real SerpApi calls — proves end-to-end integration
+  Stage 1: In-Memory backend (no Redis needed) — proves core logic works (dev)
+  Stage 2: Redis backend — proves production path works (deployment)
+  Stage 3: Real SerpApi calls — proves end-to-end integration 
 
 Run:
     python verify_cache.py                    # Stage 1 + 2 + 3
