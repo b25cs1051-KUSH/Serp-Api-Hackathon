@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "serpapi-cache"
+version = "0.1.0"
+description = "Semantic query cache for SerpApi — saves credits by returning cached results for semantically similar queries"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["serpapi", "cache", "semantic", "search", "llm", "rag"]
+dependencies = [
+    "serpapi>=1.1.0",
+    "sentence-transformers>=6.0.0",
+    "numpy>=1.26.0",
+    "redis>=5.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-mock>=3.12"]
+
+[tool.setuptools.packages.find]
+include = ["serpapi_cache*"]
