@@ -20,7 +20,7 @@ class BaseBackend(ABC):
     """Abstract cache backend. Stores (value, embedding) pairs keyed by hash."""
 
     @abstractmethod
-    def set(self, key: str, value: Any, embedding: list[float], ttl: int) -> None: ...
+    def set(self, key: str, value: Any, embedding: list[float], ttl: int, query_text: str = "") -> None: ...
 
     @abstractmethod
     def get_all(self) -> list[dict]: ...
@@ -53,12 +53,13 @@ class InMemoryBackend(BaseBackend):
         # key → { "value": ..., "embedding": [...], "expires_at": float | None }
         self._store: dict[str, dict] = {}
 
-    def set(self, key: str, value: Any, embedding: list[float], ttl: int) -> None:
+    def set(self, key: str, value: Any, embedding: list[float], ttl: int, query_text: str = "") -> None:
         expires_at = time.time() + ttl if ttl > 0 else None
         self._store[key] = {
             "value": value,
             "embedding": embedding,
             "expires_at": expires_at,
+            "query_text": query_text,
         }
 
     def get_all(self) -> list[dict]:
@@ -69,7 +70,11 @@ class InMemoryBackend(BaseBackend):
             if record["expires_at"] and now > record["expires_at"]:
                 expired_keys.append(key)
             else:
-                alive.append({"key": key, **record})
+                alive.append({
+                    "key": key,
+                    "embedding": record["embedding"],
+                    "query_text": record.get("query_text", ""),
+                })
         for k in expired_keys:
             del self._store[k]
         return alive
@@ -134,13 +139,18 @@ class RedisBackend(BaseBackend):
     def _emb_key(self, key: str) -> str:
         return f"{self.PREFIX}{key}:embedding"
 
-    def set(self, key: str, value: Any, embedding: list[float], ttl: int) -> None:
+    def _qry_key(self, key: str) -> str:
+        return f"{self.PREFIX}{key}:query"
+
+    def set(self, key: str, value: Any, embedding: list[float], ttl: int, query_text: str = "") -> None:
         pipe = self._r.pipeline()
         pipe.set(self._val_key(key), json.dumps(value))
         pipe.set(self._emb_key(key), json.dumps(embedding))
+        pipe.set(self._qry_key(key), query_text)
         if ttl > 0:
             pipe.expire(self._val_key(key), ttl)
             pipe.expire(self._emb_key(key), ttl)
+            pipe.expire(self._qry_key(key), ttl)
         pipe.sadd(self.INDEX_KEY, key)
         pipe.execute()
 
@@ -157,8 +167,8 @@ class RedisBackend(BaseBackend):
                 continue
             records.append({
                 "key": key,
-                "value": json.loads(val),
                 "embedding": json.loads(emb),
+                "query_text": self._r.get(self._qry_key(key)) or "",
             })
         if dead_keys:
             self._r.srem(self.INDEX_KEY, *dead_keys)
@@ -172,6 +182,7 @@ class RedisBackend(BaseBackend):
         pipe = self._r.pipeline()
         pipe.delete(self._val_key(key))
         pipe.delete(self._emb_key(key))
+        pipe.delete(self._qry_key(key))
         pipe.srem(self.INDEX_KEY, key)
         pipe.execute()
 
@@ -182,6 +193,7 @@ class RedisBackend(BaseBackend):
             for key in keys:
                 pipe.delete(self._val_key(key))
                 pipe.delete(self._emb_key(key))
+                pipe.delete(self._qry_key(key))
             pipe.delete(self.INDEX_KEY)
             pipe.execute()
 

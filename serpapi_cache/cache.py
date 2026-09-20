@@ -102,7 +102,7 @@ class SerpApiCache:
         cache_key = self._make_key(params)
 
         # 1. Check for semantic match in cache
-        best_match = self._find_best_match(embedding)
+        best_match = self._find_best_match(embedding, query_text)
 
         if best_match:
             similarity, matched_key = best_match
@@ -123,7 +123,7 @@ class SerpApiCache:
 
         # 3. Store result + embedding
         effective_ttl = ttl if ttl is not None else self.default_ttl
-        self.backend.set(cache_key, result, embedding, effective_ttl)
+        self.backend.set(cache_key, result, embedding, effective_ttl, query_text)
 
         return result
 
@@ -176,19 +176,29 @@ class SerpApiCache:
                 print("✅ Embedding model loaded.\n")
         return self._model.encode(text, normalize_embeddings=True).tolist()
 
-    def _find_best_match(self, query_embedding: list[float]) -> Optional[tuple[float, str]]:
+    def _find_best_match(self, query_embedding: list[float], query_text: str) -> Optional[tuple[float, str]]:
         """
         Compare query embedding against all cached embeddings.
         Returns (similarity_score, cache_key) if above threshold, else None.
+
+        Dosage guard: if both queries contain numbers and those numbers differ,
+        the match is skipped regardless of cosine similarity. This prevents
+        "Metformin 20mg" from hitting the cache for "Metformin 200mg".
         """
         records = self.backend.get_all()
         if not records:
             return None
 
+        query_nums = self._extract_dosage_numbers(query_text)
         best_score = -1.0
         best_key = None
 
         for record in records:
+            # Dosage guard — skip if numeric tokens differ
+            stored_nums = self._extract_dosage_numbers(record.get("query_text", ""))
+            if query_nums and stored_nums and query_nums != stored_nums:
+                continue
+
             score = _cosine_similarity(query_embedding, record["embedding"])
             if score > best_score:
                 best_score = score
@@ -197,6 +207,16 @@ class SerpApiCache:
         if best_score >= self.threshold:
             return (best_score, best_key)
         return None
+
+    @staticmethod
+    def _extract_dosage_numbers(text: str) -> frozenset[str]:
+        """
+        Extract all numeric tokens (integers and decimals) from a query string.
+        Used by the dosage guard to distinguish e.g. '20mg' from '200mg'.
+        Returns a frozenset so order doesn't matter for comparison.
+        """
+        import re
+        return frozenset(re.findall(r'\d+(?:\.\d+)?', text))
 
     def _call_serpapi(self, params: dict) -> dict:
         """Make the actual SerpApi call."""
