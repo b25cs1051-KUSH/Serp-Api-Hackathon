@@ -1,9 +1,13 @@
 """
-backends.py — Storage backends for the SerpApi semantic cache.
+backends.py — Redis storage backend for the SerpApi semantic cache.
 
-Two backends:
-  - InMemoryBackend : zero-infra, great for dev/testing
-  - RedisBackend    : production-grade, persistent, TTL support
+RedisBackend is the only supported backend. It provides:
+  - Persistence across restarts (AOF via docker-compose)
+  - Native TTL support
+  - Cross-process cache sharing
+
+Start Redis before using:
+    docker compose up -d
 """
 
 import json
@@ -17,7 +21,7 @@ from typing import Any, Optional
 # ─────────────────────────────────────────────
 
 class BaseBackend(ABC):
-    """Abstract cache backend. Stores (value, embedding) pairs keyed by hash."""
+    """Abstract cache backend. Stores (value, embedding, query_text) pairs keyed by hash."""
 
     @abstractmethod
     def set(self, key: str, value: Any, embedding: list[float], ttl: int, query_text: str = "") -> None: ...
@@ -39,79 +43,23 @@ class BaseBackend(ABC):
 
 
 # ─────────────────────────────────────────────
-# In-Memory Backend (dev/testing)
-# ─────────────────────────────────────────────
-
-class InMemoryBackend(BaseBackend):
-    """
-    Pure Python dict cache. No external dependencies.
-    Perfect for development, unit tests, or quick demos.
-    Data is lost when the process exits.
-    """
-
-    def __init__(self):
-        # key → { "value": ..., "embedding": [...], "expires_at": float | None }
-        self._store: dict[str, dict] = {}
-
-    def set(self, key: str, value: Any, embedding: list[float], ttl: int, query_text: str = "") -> None:
-        expires_at = time.time() + ttl if ttl > 0 else None
-        self._store[key] = {
-            "value": value,
-            "embedding": embedding,
-            "expires_at": expires_at,
-            "query_text": query_text,
-        }
-
-    def get_all(self) -> list[dict]:
-        now = time.time()
-        alive = []
-        expired_keys = []
-        for key, record in self._store.items():
-            if record["expires_at"] and now > record["expires_at"]:
-                expired_keys.append(key)
-            else:
-                alive.append({
-                    "key": key,
-                    "embedding": record["embedding"],
-                    "query_text": record.get("query_text", ""),
-                })
-        for k in expired_keys:
-            del self._store[k]
-        return alive
-
-    def get_by_key(self, key: str) -> Optional[Any]:
-        record = self._store.get(key)
-        if not record:
-            return None
-        if record["expires_at"] and time.time() > record["expires_at"]:
-            del self._store[key]
-            return None
-        return record["value"]
-
-    def delete(self, key: str) -> None:
-        self._store.pop(key, None)
-
-    def flush(self) -> None:
-        self._store.clear()
-
-    def size(self) -> int:
-        return len(self.get_all())
-
-
-# ─────────────────────────────────────────────
-# Redis Backend (production)
+# Redis Backend (only backend)
 # ─────────────────────────────────────────────
 
 class RedisBackend(BaseBackend):
     """
     Redis-backed cache. Persistent across restarts, supports TTL natively.
 
-    Each entry is stored as two Redis keys:
+    Each entry is stored as three Redis keys:
       - serpapi:cache:<hash>:value     → JSON-serialized API result
       - serpapi:cache:<hash>:embedding → JSON-serialized float list
+      - serpapi:cache:<hash>:query     → original query text (for dosage guard)
 
     An index key `serpapi:cache:index` (Redis Set) tracks all active hashes
     so we can retrieve all embeddings for similarity comparison.
+
+    Start Redis:
+        docker compose up -d
     """
 
     INDEX_KEY = "serpapi:cache:index"
@@ -167,6 +115,7 @@ class RedisBackend(BaseBackend):
                 continue
             records.append({
                 "key": key,
+                "value": json.loads(val),
                 "embedding": json.loads(emb),
                 "query_text": self._r.get(self._qry_key(key)) or "",
             })

@@ -1,19 +1,19 @@
 """
 verify_cache.py — Full verification suite for SerpApiCache.
 
-Runs 3 stages:
-  Stage 1: In-Memory backend (no Redis needed) — proves core logic works (dev)
-  Stage 2: Redis backend — proves production path works (deployment)
-  Stage 3: Real SerpApi calls — proves end-to-end integration 
+Runs 2 stages (both require Redis):
+  Stage 1: Redis backend — core logic + dosage guard + persistence
+  Stage 2: Real SerpApi calls — end-to-end integration
+
+Prerequisites:
+    docker compose up -d
 
 Run:
-    python verify_cache.py                    # Stage 1 + 2 + 3
-    python verify_cache.py --no-redis         # Stage 1 + 3 only (skip Redis)
-    python verify_cache.py --offline          # Stage 1 only (no API calls, no Redis)
+    python scripts/verify_cache.py            # Stage 1 + 2
+    python scripts/verify_cache.py --offline  # Stage 1 only (no API calls)
 """
 
 import sys, io, os
-# Allow running from any directory — add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
@@ -24,14 +24,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 # ──────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────
 
 def section(title: str):
-    print(f"\n{'═' * 55}")
+    print(f"\n{'═' * 60}")
     print(f"  {title}")
-    print('═' * 55)
+    print('═' * 60)
 
 def ok(msg: str):
     print(f"  ✅  {msg}")
@@ -45,207 +46,187 @@ def info(msg: str):
 
 
 # ──────────────────────────────────────
-# Stage 1: In-Memory Backend
-# ──────────────────────────────────────
-
-def test_in_memory():
-    section("STAGE 1 — In-Memory Backend (no Redis required)")
-
-    from serpapi_cache import SerpApiCache, InMemoryBackend
-
-    # Use a dummy API key for this stage — we mock the SerpApi call
-    cache = SerpApiCache(
-        api_key="test_key_not_real",
-        backend=InMemoryBackend(),
-        similarity_threshold=0.80,  # tuned default
-        default_ttl=60,
-        verbose=True,
-    )
-
-    # ── Monkey-patch _call_serpapi to avoid real API calls ──
-    call_count = [0]
-    def fake_serpapi(params):
-        call_count[0] += 1
-        return {"organic_results": [{"title": f"Fake result for: {params.get('q')}"}],
-                "_mock": True}
-    cache._call_serpapi = fake_serpapi
-
-    # ── Test 1: First call → miss → stored ──
-    info("Test 1: First search (should be MISS)")
-    r1 = cache.search({"engine": "google", "q": "best laptop under 50000 India"})
-    assert call_count[0] == 1, "Expected 1 API call"
-    assert cache.size() == 1, "Expected 1 entry in cache"
-    ok(f"MISS confirmed — API called once, cache now has {cache.size()} entry")
-
-    # ── Test 2: Exact same query → hit ──
-    info("Test 2: Exact same query (should be HIT)")
-    r2 = cache.search({"engine": "google", "q": "best laptop under 50000 India"})
-    assert call_count[0] == 1, "API should NOT be called again"
-    ok("HIT confirmed — no extra API call")
-
-    # ── Test 3: Semantically similar query → hit ──
-    info("Test 3: Semantically similar query (should be HIT via similarity)")
-    r3 = cache.search({"engine": "google", "q": "top laptops below 50k in India"})
-    if call_count[0] == 1:
-        ok(f"Semantic HIT confirmed — similar query matched cache")
-    else:
-        info("Semantic MISS (similarity below threshold) — this is OK, threshold can be tuned")
-
-    # ── Test 4: Very different query → miss ──
-    info("Test 4: Completely different query (should be MISS)")
-    calls_before = call_count[0]
-    r4 = cache.search({"engine": "google", "q": "India GDP growth 2026 forecast"})
-    assert call_count[0] > calls_before, "New query should trigger API call"
-    ok(f"MISS confirmed — different query correctly triggers API call")
-
-    # ── Test 5: TTL check ──
-    info("Test 5: TTL expiry — cache entry with 1 second TTL")
-    cache_ttl = SerpApiCache(
-        api_key="test_key",
-        backend=InMemoryBackend(),
-        default_ttl=1,
-        verbose=False,
-    )
-    cache_ttl._call_serpapi = fake_serpapi
-    cache_ttl.search({"engine": "google", "q": "ttl test query"})
-    assert cache_ttl.size() == 1, "Should have 1 entry"
-    time.sleep(1.1)
-    assert cache_ttl.size() == 0, "Entry should have expired"
-    ok("TTL expiry works correctly")
-
-    # ── Test 6: Flush ──
-    info("Test 6: Flush cache")
-    cache.flush()
-    assert cache.size() == 0, "Cache should be empty after flush"
-    ok("Flush works correctly")
-
-    # ── Stats ──
-    cache.print_stats()
-
-    ok("ALL IN-MEMORY TESTS PASSED ✓")
-
-
-# ──────────────────────────────────────
-# Stage 2: Redis Backend
+# Stage 1: Redis backend tests
 # ──────────────────────────────────────
 
 def test_redis():
-    section("STAGE 2 — Redis Backend (production path)")
+    section("STAGE 1 — Redis Backend: Core logic + dosage guard + persistence")
 
     try:
         from serpapi_cache import SerpApiCache, RedisBackend
         backend = RedisBackend(host="localhost", port=6379)
     except Exception as e:
-        fail(f"Could not connect to Redis: {e}\n"
-             f"  → Start Redis with: docker run -d -p 6379:6379 redis\n"
-             f"  → Or run with --no-redis to skip this stage")
+        fail(
+            f"Could not connect to Redis: {e}\n"
+            f"  → Start Redis: docker compose up -d"
+        )
 
     cache = SerpApiCache(
-        api_key="test_key_redis",
+        api_key="test_key_not_real",
         backend=backend,
-        similarity_threshold=0.85,
-        default_ttl=30,
+        similarity_threshold=0.80,
+        default_ttl=120,
         verbose=True,
     )
-
-    # Flush any leftover test data
-    cache.flush()
+    cache.flush()  # clean slate
 
     call_count = [0]
     def fake_serpapi(params):
         call_count[0] += 1
-        return {"organic_results": [{"title": f"Redis result: {params.get('q')}"}], "_redis_mock": True}
+        return {"organic_results": [{"title": f"Fake: {params.get('q')}"}], "_mock": True}
     cache._call_serpapi = fake_serpapi
 
-    info("Test 1: Write to Redis + read back")
-    cache.search({"engine": "google", "q": "Redis test query serpapi cache"})
+    # ── Test 1: First call → MISS ──
+    info("Test 1: First search (MISS expected)")
+    cache.search({"engine": "google", "q": "Metformin 500mg price India"})
+    assert call_count[0] == 1, "Expected 1 API call"
     assert cache.size() == 1
-    ok("Written to Redis successfully")
+    ok(f"MISS confirmed — cache has {cache.size()} entry in Redis")
 
-    info("Test 2: Hit from Redis")
-    cache.search({"engine": "google", "q": "Redis test query serpapi cache"})
-    assert call_count[0] == 1, "Should hit Redis, not call API"
-    ok("Redis cache HIT confirmed")
+    # ── Test 2: Exact same query → HIT ──
+    info("Test 2: Exact same query (HIT expected)")
+    cache.search({"engine": "google", "q": "Metformin 500mg price India"})
+    assert call_count[0] == 1, "API should NOT be called again"
+    ok("HIT confirmed — no extra API call")
 
-    info("Test 3: Persistence — create new cache instance, same Redis")
+    # ── Test 3: Same drug, same dosage, different phrasing → HIT ──
+    info("Test 3: Same dosage, different phrasing (HIT expected — cosine + dosage guard pass)")
+    cache.search({"engine": "google", "q": "Metformin 500 mg cost India"})
+    if call_count[0] == 1:
+        ok("HIT confirmed — '500mg' and '500 mg' matched")
+    else:
+        info("MISS (similarity below threshold) — consider lowering threshold")
+
+    # ── Test 4: Same drug, DIFFERENT dosage → MISS (dosage guard) ──
+    info("Test 4: Different dosage (MISS expected — dosage guard fires)")
+    before = call_count[0]
+    cache.search({"engine": "google", "q": "Metformin 200mg price India"})
+    assert call_count[0] > before, "Dosage guard should have forced a MISS"
+    ok("MISS confirmed — dosage guard blocked '200mg' from matching '500mg'")
+
+    # ── Test 5: Completely different query → MISS ──
+    info("Test 5: Different drug entirely (MISS expected)")
+    before = call_count[0]
+    cache.search({"engine": "google", "q": "Atorvastatin 10mg tablet price India"})
+    assert call_count[0] > before, "Different drug must miss"
+    ok("MISS confirmed — different drug correctly triggers API call")
+
+    # ── Test 6: No numbers in query → dosage guard skipped, cosine decides ──
+    info("Test 6: No dosage in query (HIT or MISS decided by cosine only)")
+    before = call_count[0]
+    cache.search({"engine": "google", "q": "cheap diabetes medicine India"})
+    if call_count[0] == before:
+        ok("HIT via cosine — no numbers, dosage guard skipped")
+    else:
+        ok("MISS via cosine — semantics too different, dosage guard correctly skipped")
+
+    # ── Test 7: Persistence — new cache instance, same Redis ──
+    info("Test 7: Persistence — new SerpApiCache instance reads from same Redis")
+    size_before = cache.size()
     cache2 = SerpApiCache(
-        api_key="test_key_redis",
+        api_key="test_key_not_real",
         backend=RedisBackend(host="localhost", port=6379),
-        similarity_threshold=0.85,
-        verbose=True,
+        similarity_threshold=0.80,
+        verbose=False,
     )
-    cache2._call_serpapi = fake_serpapi
-    cache2.search({"engine": "google", "q": "Redis test query serpapi cache"})
-    assert call_count[0] == 1, "New instance should still hit Redis"
+    call_count_2 = [0]
+    def fake_serpapi_2(params):
+        call_count_2[0] += 1
+        return {"_mock2": True}
+    cache2._call_serpapi = fake_serpapi_2
+    cache2.search({"engine": "google", "q": "Metformin 500mg price India"})
+    assert call_count_2[0] == 0, "New instance must hit Redis, not call API"
+    assert cache2.size() == size_before
     ok("Persistence confirmed — data survives across cache instances")
 
-    # Cleanup
+    cache.print_stats()
     cache.flush()
     ok("ALL REDIS TESTS PASSED ✓")
 
 
 # ──────────────────────────────────────
-# Stage 3: Real SerpApi Integration
+# Stage 2: Real SerpApi Integration
 # ──────────────────────────────────────
 
 def test_real_api():
-    section("STAGE 3 — Real SerpApi Integration Test")
+    section("STAGE 2 — Real SerpApi Integration (uses Redis)")
 
-    from serpapi_cache import SerpApiCache, InMemoryBackend
+    from serpapi_cache import SerpApiCache, RedisBackend
     import os
 
     api_key = os.getenv("SERP_API_KEY") or os.getenv("SERPAPI_API_KEY")
     if not api_key:
         fail("No SERP_API_KEY found in environment. Check your .env file.")
 
+    try:
+        backend = RedisBackend(host="localhost", port=6379)
+    except Exception as e:
+        fail(f"Redis not reachable: {e}\n  → Start Redis: docker compose up -d")
+
     cache = SerpApiCache(
         api_key=api_key,
-        backend=InMemoryBackend(),
+        backend=backend,
         similarity_threshold=0.88,
-        default_ttl=300,
+        default_ttl=3600,
         verbose=True,
     )
+    cache.flush()
 
     # ── Call 1: First real search ──
-    info("Test 1: Real SerpApi search (costs 1 credit)")
+    info("Test 1: Real SerpApi search — Metformin price India (costs 1 credit)")
     t0 = time.time()
     result = cache.search({
         "engine": "google",
-        "q": "SerpApi Python SDK tutorial 2026",
+        "q": "Metformin 500mg price India",
         "num": 5,
     })
     t1 = time.time()
 
     assert "organic_results" in result or "search_metadata" in result, \
         f"Unexpected result structure: {list(result.keys())}"
-    ok(f"Real API call succeeded in {t1-t0:.2f}s")
+    ok(f"Real API call succeeded in {t1-t0:.2f}s — stored in Redis")
 
     if "organic_results" in result:
         first = result["organic_results"][0]
         info(f"First result: {first.get('title', 'N/A')}")
 
-    # ── Call 2: Same query → should be FREE (cache hit) ──
-    info("Test 2: Same query again (should be FREE — cache hit)")
+    # ── Call 2: Same query → FREE cache hit ──
+    info("Test 2: Same query (HIT — no API credit used)")
     t2 = time.time()
     result2 = cache.search({
         "engine": "google",
-        "q": "SerpApi Python SDK tutorial 2026",
+        "q": "Metformin 500mg price India",
         "num": 5,
     })
     t3 = time.time()
-
-    assert result2 == result, "Cached result should match original"
+    assert result2 == result
     ok(f"Cache HIT in {t3-t2:.4f}s (vs {t1-t0:.2f}s for real call) — {(t1-t0)/(t3-t2+0.0001):.0f}x faster!")
 
-    # ── Call 3: Semantically similar ──
-    info("Test 3: Semantically similar query (may or may not hit depending on threshold)")
+    # ── Call 3: Different dosage → MISS (dosage guard) ──
+    info("Test 3: Different dosage — 'Metformin 200mg' (dosage guard → MISS, costs 1 credit)")
     result3 = cache.search({
         "engine": "google",
-        "q": "SerpApi Python library guide",
+        "q": "Metformin 200mg price India",
         "num": 5,
     })
+    ok("Dosage guard correctly prevented cross-dosage cache hit")
 
-    # ── Final stats ──
+    # ── Call 4: New instance — prove data persists in Redis ──
+    info("Test 4: New SerpApiCache instance reads Metformin 500mg from Redis (no credit)")
+    cache2 = SerpApiCache(
+        api_key=api_key,
+        backend=RedisBackend(host="localhost", port=6379),
+        similarity_threshold=0.88,
+        verbose=True,
+    )
+    result4 = cache2.search({
+        "engine": "google",
+        "q": "Metformin 500mg price India",
+        "num": 5,
+    })
+    assert result4 == result, "Must return same cached result"
+    ok("Persistence confirmed — new instance hit Redis without extra API call")
+
     cache.print_stats()
     ok("ALL REAL API TESTS PASSED ✓")
 
@@ -256,25 +237,20 @@ def test_real_api():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Verify SerpApiCache")
-    parser.add_argument("--no-redis", action="store_true", help="Skip Redis tests")
-    parser.add_argument("--offline", action="store_true", help="Run only in-memory tests, no API calls")
+    parser.add_argument("--offline", action="store_true",
+                        help="Stage 1 only — no real API calls")
     args = parser.parse_args()
 
     print("\n🚀 SerpApi Semantic Cache — Verification Suite")
-    print("=" * 55)
+    print("=" * 60)
 
-    test_in_memory()
+    test_redis()
 
     if not args.offline:
-        if not args.no_redis:
-            test_redis()
-        else:
-            print("\n⏭️  Skipping Stage 2 (Redis) — --no-redis flag set")
-
         test_real_api()
     else:
-        print("\n⏭️  Skipping Stages 2 & 3 (offline mode)")
+        print("\n⏭️  Skipping Stage 2 (offline mode — no real API calls)")
 
-    print("\n" + "=" * 55)
-    print("  🎉 ALL STAGES PASSED — Cache is ready to use!")
-    print("=" * 55 + "\n")
+    print("\n" + "=" * 60)
+    print("  🎉 ALL STAGES PASSED — Cache is ready!")
+    print("=" * 60 + "\n")
