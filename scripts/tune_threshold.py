@@ -1,19 +1,18 @@
 """
-tune_threshold.py — Find the right similarity threshold for your use case.
+tune_threshold.py — Find the right similarity threshold for pharma queries.
 
-Prints cosine similarity scores for a set of query pairs so you can
-decide what threshold makes sense for your cache.
+Prints cosine similarity scores + dosage guard status for pharma query pairs
+so you can decide what threshold makes sense.
 
 Run:
-    python tune_threshold.py
+    python scripts/tune_threshold.py
 """
 
 import sys, io, os
-# Allow running from any directory — add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-
+import re
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -24,33 +23,53 @@ def sim(a, b):
     eb = model.encode(b, normalize_embeddings=True)
     return float(np.dot(ea, eb))
 
-pairs = [
-    # Should HIT (same intent, different words)
-    ("best laptop under 50000 India",       "top laptops below 50k in India",          "SHOULD HIT"),
-    ("SerpApi Python SDK tutorial 2026",    "SerpApi Python library guide",             "SHOULD HIT"),
-    ("cheapest medicine for diabetes India","affordable diabetes drugs India",           "SHOULD HIT"),
-    ("government tenders IT sector India",  "India govt IT procurement tenders",        "SHOULD HIT"),
+def extract_numbers(text: str) -> set[str]:
+    return set(re.findall(r"\d+\.?\d*", text))
 
-    # Should MISS (different intent)
-    ("best laptop under 50000 India",       "India GDP growth 2026 forecast",           "SHOULD MISS"),
-    ("medicine price comparison India",     "SerpApi Python tutorial",                  "SHOULD MISS"),
-    ("government tenders IT sector India",  "best restaurants in Bangalore",            "SHOULD MISS"),
+def dosage_guard_fires(a: str, b: str) -> bool:
+    na, nb = extract_numbers(a), extract_numbers(b)
+    if not na or not nb:
+        return False
+    return na != nb
+
+# (query_a, query_b, expected_verdict)
+pairs = [
+    # Should HIT — same dosage, different phrasing
+    ("Metformin 500mg price India",           "Metformin 500 mg cost India",             "HIT"),
+    ("Atorvastatin 10mg tablet price",        "Atorvastatin 10 mg cost India",           "HIT"),
+    # Should HIT — no numbers in one query, cosine decides
+    ("cheap Paracetamol 500mg India",         "affordable Paracetamol tablet India",     "HIT"),
+    ("generic substitute for Januvia India",  "Januvia generic alternative India",       "HIT"),
+    # Should MISS — dosage guard fires
+    ("Metformin 20mg price India",            "Metformin 200mg price India",             "MISS"),
+    ("Atorvastatin 10mg price India",         "Atorvastatin 20mg price India",           "MISS"),
+    # Should MISS — different drug
+    ("Metformin 500mg price India",           "Amlodipine 5mg price India",              "MISS"),
+    ("Levothyroxine 50mcg price India",       "Atorvastatin 10mg tablet price",          "MISS"),
 ]
 
-THRESHOLD = 0.80   # must match SerpApiCache default_threshold in cache.py
+THRESHOLD = 0.80
 
-print("\n" + "="*70)
-print(f"  Similarity Threshold Tuning  (current threshold = {THRESHOLD})")
-print("="*70)
-print(f"  {'Score':>6}  {'Verdict':<12}  Query Pair")
-print("-"*70)
+print("\n" + "=" * 90)
+print(f"  Pharma Similarity Threshold Tuning  (threshold = {THRESHOLD})")
+print("=" * 90)
+print(f"  {'Score':>6}  {'Guard':^7}  {'Verdict':<6}  {'Expected':<6}  {'':^4}  Query Pair")
+print("-" * 90)
 
-for a, b, label in pairs:
+all_pass = True
+for a, b, expected in pairs:
     score = sim(a, b)
-    verdict = "HIT " if score >= THRESHOLD else "MISS"
-    flag = "✅" if (verdict == "HIT " and "HIT" in label) or (verdict == "MISS" and "MISS" in label) else "❌"
-    print(f"  {score:.4f}  [{verdict}] {flag}  '{a[:30]}' <-> '{b[:30]}'")
+    guard = dosage_guard_fires(a, b)
+    # Final verdict: MISS if guard fires OR score below threshold
+    verdict = "MISS" if (guard or score < THRESHOLD) else "HIT"
+    passed = verdict == expected
+    if not passed:
+        all_pass = False
+    flag = "✅" if passed else "❌"
+    guard_str = "FIRED" if guard else "ok   "
+    print(f"  {score:.4f}  [{guard_str}]  {verdict:<6}  {expected:<6}  {flag}   '{a[:35]}' <-> '{b[:35]}'")
 
-print("="*70)
+print("=" * 90)
 print(f"\n  Active threshold : {THRESHOLD}")
+print(f"  All pairs pass   : {'✅ YES' if all_pass else '❌ NO — adjust THRESHOLD or review pairs'}")
 print("  Higher = fewer false hits | Lower = more aggressive caching\n")

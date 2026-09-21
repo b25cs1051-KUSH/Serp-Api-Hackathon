@@ -4,19 +4,20 @@ cache.py — Core SerpApiCache class.
 Flow on every search():
   1. Encode the query into a vector embedding
   2. Compare against all cached embeddings via cosine similarity
-  3. If similarity >= threshold → return cached result (CACHE HIT)
-  4. If below threshold → call SerpApi → store result + embedding (CACHE MISS)
+  3. Run dosage guard: if both queries contain numbers and the sets differ → force MISS
+  4. If similarity >= threshold AND dosage guard passes → return cached result (CACHE HIT)
+  5. If below threshold or guard fires → call SerpApi → store result + embedding (CACHE MISS)
 
-The cache is backend-agnostic: works with InMemoryBackend or RedisBackend.
+Requires Redis. Start with: docker compose up -d
 """
 
 import hashlib
 import json
 import os
-import time
+import re
 from typing import Any, Optional
 
-from .backends import BaseBackend, InMemoryBackend
+from .backends import BaseBackend, RedisBackend
 
 
 # ─────────────────────────────────────────────
@@ -31,20 +32,43 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
 
 
 # ─────────────────────────────────────────────
+# Dosage guard
+# ─────────────────────────────────────────────
+
+def _extract_numbers(text: str) -> set[str]:
+    """Extract all numeric tokens (integers and decimals) from a string."""
+    return set(re.findall(r"\d+\.?\d*", text))
+
+
+def _dosage_guard_fires(query_a: str, query_b: str) -> bool:
+    """
+    Returns True (block the hit) if both queries contain numeric tokens
+    and those sets differ — e.g. 'Metformin 20mg' vs 'Metformin 200mg'.
+    If either query has no numbers, the guard is skipped (returns False).
+    """
+    nums_a = _extract_numbers(query_a)
+    nums_b = _extract_numbers(query_b)
+    if not nums_a or not nums_b:
+        return False  # no dosage in at least one query — let cosine decide
+    return nums_a != nums_b
+
+
+# ─────────────────────────────────────────────
 # Main Cache Class
 # ─────────────────────────────────────────────
 
 class SerpApiCache:
     """
     Semantic cache wrapper around the SerpApi Python client.
+    Uses Redis as the only backend — persistent across restarts.
 
     Args:
-        api_key           : SerpApi API key (or set SERP_API_KEY in .env)
-        backend           : Storage backend (InMemoryBackend or RedisBackend)
+        api_key              : SerpApi API key (or set SERP_API_KEY in .env)
+        backend              : RedisBackend instance (auto-connects to localhost:6379 if not passed)
         similarity_threshold : Cosine similarity cutoff for a cache hit (0–1)
-        default_ttl       : Seconds before a cached entry expires (0 = never)
-        embedding_model   : Sentence-Transformers model name
-        verbose           : Print HIT/MISS logs
+        default_ttl          : Seconds before a cached entry expires (0 = never)
+        embedding_model      : Sentence-Transformers model name
+        verbose              : Print HIT/MISS logs
 
     Example:
         from serpapi_cache import SerpApiCache, RedisBackend
@@ -54,14 +78,14 @@ class SerpApiCache:
             backend=RedisBackend(host="localhost"),
             similarity_threshold=0.88,
         )
-        results = cache.search({"engine": "google", "q": "best laptop India 2026"})
+        results = cache.search({"engine": "google", "q": "Metformin 500mg price India"})
     """
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         backend: Optional[BaseBackend] = None,
-        similarity_threshold: float = 0.80,  # tuned: catches semantically same queries (>0.80)
+        similarity_threshold: float = 0.80,
         default_ttl: int = 3600,          # 1 hour default
         embedding_model: str = "all-MiniLM-L6-v2",
         verbose: bool = True,
@@ -78,8 +102,11 @@ class SerpApiCache:
         self.default_ttl = default_ttl
         self.verbose = verbose
 
-        # ── Backend (default: in-memory) ─────────────────────────
-        self.backend: BaseBackend = backend or InMemoryBackend()
+        # ── Backend — Redis only ─────────────────────────────────
+        if backend is not None:
+            self.backend: BaseBackend = backend
+        else:
+            self.backend = RedisBackend(host="localhost", port=6379)
 
         # ── Embedding model (lazy-loaded on first use) ────────────
         self._model_name = embedding_model
@@ -95,14 +122,15 @@ class SerpApiCache:
     def search(self, params: dict, ttl: Optional[int] = None) -> dict:
         """
         Drop-in replacement for serpapi.Client.search().
-        Returns cached result if a semantically similar query exists.
+        Returns cached result if a semantically similar query exists
+        and the dosage guard does not block the match.
         """
         query_text = self._params_to_query_string(params)
         embedding = self._embed(query_text)
         cache_key = self._make_key(params)
 
         # 1. Check for semantic match in cache
-        best_match = self._find_best_match(embedding)
+        best_match = self._find_best_match(embedding, query_text)
 
         if best_match:
             similarity, matched_key = best_match
@@ -121,9 +149,9 @@ class SerpApiCache:
 
         result = self._call_serpapi(params)
 
-        # 3. Store result + embedding
+        # 3. Store result + embedding + query_text
         effective_ttl = ttl if ttl is not None else self.default_ttl
-        self.backend.set(cache_key, result, embedding, effective_ttl)
+        self.backend.set(cache_key, result, embedding, effective_ttl, query_text)
 
         return result
 
@@ -176,10 +204,11 @@ class SerpApiCache:
                 print("✅ Embedding model loaded.\n")
         return self._model.encode(text, normalize_embeddings=True).tolist()
 
-    def _find_best_match(self, query_embedding: list[float]) -> Optional[tuple[float, str]]:
+    def _find_best_match(self, query_embedding: list[float], query_text: str) -> Optional[tuple[float, str]]:
         """
         Compare query embedding against all cached embeddings.
-        Returns (similarity_score, cache_key) if above threshold, else None.
+        Applies dosage guard after finding the best cosine candidate.
+        Returns (similarity_score, cache_key) if above threshold and guard passes, else None.
         """
         records = self.backend.get_all()
         if not records:
@@ -187,16 +216,25 @@ class SerpApiCache:
 
         best_score = -1.0
         best_key = None
+        best_query_text = ""
 
         for record in records:
             score = _cosine_similarity(query_embedding, record["embedding"])
             if score > best_score:
                 best_score = score
                 best_key = record["key"]
+                best_query_text = record.get("query_text", "")
 
-        if best_score >= self.threshold:
-            return (best_score, best_key)
-        return None
+        if best_score < self.threshold:
+            return None
+
+        # Dosage guard — check after threshold to avoid unnecessary work
+        if _dosage_guard_fires(query_text, best_query_text):
+            if self.verbose:
+                print(f"⚠️  DOSAGE GUARD | blocked hit | '{query_text[:40]}' vs '{best_query_text[:40]}'")
+            return None
+
+        return (best_score, best_key)
 
     def _call_serpapi(self, params: dict) -> dict:
         """Make the actual SerpApi call."""
@@ -206,19 +244,15 @@ class SerpApiCache:
             raise ImportError("serpapi package not installed. Run: pip install serpapi")
 
         client = serpapi.Client(api_key=self.api_key)
-        params_with_key = {**params}
-        result = client.search(params_with_key)
-        # Convert to plain dict (serpapi returns a special object)
+        result = client.search({**params})
         return dict(result)
 
     @staticmethod
     def _params_to_query_string(params: dict) -> str:
         """Convert search params to a single string for embedding."""
         parts = []
-        # Lead with the query — most semantically important
         if "q" in params:
             parts.append(params["q"])
-        # Include engine and location for semantic context
         if "engine" in params:
             parts.append(f"engine:{params['engine']}")
         if "location" in params:
