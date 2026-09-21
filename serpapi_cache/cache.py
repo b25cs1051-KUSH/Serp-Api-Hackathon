@@ -8,7 +8,10 @@ Flow on every search():
   4. If similarity >= threshold AND dosage guard passes → return cached result (CACHE HIT)
   5. If below threshold or guard fires → call SerpApi → store result + embedding (CACHE MISS)
 
-Requires Redis. Start with: docker compose up -d
+If Redis is unavailable at startup, the cache runs in passthrough mode:
+  every search() call hits SerpApi directly — no caching, no crash.
+
+Start Redis with: docker compose up -d
 """
 
 import hashlib
@@ -102,11 +105,22 @@ class SerpApiCache:
         self.default_ttl = default_ttl
         self.verbose = verbose
 
-        # ── Backend — Redis only ─────────────────────────────────
+        # ── Backend — Redis with passthrough fallback ────────────
         if backend is not None:
-            self.backend: BaseBackend = backend
+            # Caller passed an explicit backend — use it, let errors propagate
+            self.backend: Optional[BaseBackend] = backend
         else:
-            self.backend = RedisBackend(host="localhost", port=6379)
+            try:
+                self.backend = RedisBackend(host="localhost", port=6379)
+            except Exception as e:
+                import warnings
+                warnings.warn(
+                    f"\n⚠️  Redis not reachable (localhost:6379): {e}\n"
+                    "   Running in PASSTHROUGH mode — all searches go directly to SerpApi.\n"
+                    "   Start Redis: docker compose up -d",
+                    stacklevel=2,
+                )
+                self.backend = None
 
         # ── Embedding model (lazy-loaded on first use) ────────────
         self._model_name = embedding_model
@@ -124,7 +138,18 @@ class SerpApiCache:
         Drop-in replacement for serpapi.Client.search().
         Returns cached result if a semantically similar query exists
         and the dosage guard does not block the match.
+
+        If Redis is unavailable (backend is None), skips cache entirely
+        and calls SerpApi directly — passthrough mode.
         """
+        # Passthrough mode — Redis unavailable
+        if self.backend is None:
+            if self.verbose:
+                query_text = self._params_to_query_string(params)
+                print(f"⚡ PASSTHROUGH | Redis down — calling SerpApi directly for '{query_text[:60]}'")
+            self.stats["misses"] += 1
+            return self._call_serpapi(params)
+
         query_text = self._params_to_query_string(params)
         embedding = self._embed(query_text)
         cache_key = self._make_key(params)
@@ -156,13 +181,17 @@ class SerpApiCache:
         return result
 
     def flush(self) -> None:
-        """Clear all cached entries."""
+        """Clear all cached entries. No-op if Redis is unavailable."""
+        if self.backend is None:
+            return
         self.backend.flush()
         if self.verbose:
             print("🗑️  Cache flushed.")
 
     def size(self) -> int:
-        """Number of entries currently in cache."""
+        """Number of entries currently in cache. Returns 0 if Redis is unavailable."""
+        if self.backend is None:
+            return 0
         return self.backend.size()
 
     def get_stats(self) -> dict:
@@ -174,6 +203,7 @@ class SerpApiCache:
             "total_searches": total,
             "hit_rate_pct": round(hit_rate, 1),
             "cache_size": self.size(),
+            "backend": "passthrough" if self.backend is None else "redis",
         }
 
     def print_stats(self) -> None:
