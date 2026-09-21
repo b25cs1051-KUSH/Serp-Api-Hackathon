@@ -11,11 +11,11 @@
       "description": "Tier-1 Metro Cities (Delhi NCR, Mumbai, Thane, Pune, Bengaluru, Chennai, Hyderabad, Kolkata, Ahmedabad)"
     },
     "tier2": {
-      "prefixes": ["16", "22", "28", "30", "32", "39", "45", "46", "64", "68", "75", "80"],
+      "prefixes": ["16", "22", "28", "30", "32", "39", "44", "45", "46", "58", "64", "68", "75", "80"],
       "description": "Tier-2 Major Urban Centers (Chandigarh, Lucknow, Jaipur, Patna, Surat, Indore, Kochi, Coimbatore, Bhubaneswar, Visakhapatnam)"
     },
     "tier3": {
-      "prefixes": ["14", "15", "21", "23", "24", "27", "31", "33", "34", "36", "42", "43", "47", "48", "51", "52", "53", "57", "61", "62", "63", "67", "71", "72", "73", "81", "82", "83", "84", "85"],
+      "prefixes": ["13", "14", "15", "21", "23", "24", "27", "31", "33", "34", "36", "37", "38", "42", "43", "47", "48", "49", "51", "52", "53", "57", "59", "61", "62", "63", "67", "71", "72", "73", "76", "77", "81", "82", "83", "84", "85"],
       "description": "Tier-3 Towns and District Headquarters across Indian states"
     },
     "remote": {
@@ -23,7 +23,7 @@
       "description": "Hilly, Island, and Far-Eastern Regions (Himachal Pradesh, J&K, Ladakh, Andaman & Nicobar, North-East states)"
     },
     "unserviceable": {
-      "prefixes": ["1941", "7921", "7443"],
+      "prefixes": ["1941", "7921", "744", "682551", "682559"],
       "description": "Extremely remote high-altitude or restricted border outpost zones"
     },
     "default": "tier3"
@@ -33,28 +33,27 @@
       "display_name": "Tata 1mg",
       "serviceable": true,
       "fee_type": "tier_based",
-      "platform_fee": 15,
-      "cod_fee": 25,
+      "platform_fee": 0.00,
       "zones": {
         "metro": {
-          "delivery_fee": 25,
-          "free_delivery_threshold": 500,
+          "delivery_fee": 50,
+          "free_delivery_threshold": 100,
           "estimated_days": "1-2 Days"
         },
         "tier2": {
-          "delivery_fee": 45,
-          "free_delivery_threshold": 750,
+          "delivery_fee": 50,
+          "free_delivery_threshold": 250,
           "estimated_days": "2-3 Days"
         },
         "tier3": {
           "delivery_fee": 50,
-          "free_delivery_threshold": 1000,
-          "estimated_days": "3-5 Days"
+          "free_delivery_threshold": 250,
+          "estimated_days": "2-3 Days"
         },
         "remote": {
-          "delivery_fee": 99,
-          "free_delivery_threshold": 1500,
-          "estimated_days": "5-8 Days"
+          "delivery_fee": 50,
+          "free_delivery_threshold": 250,
+          "estimated_days": "4-5 Days"
         },
         "unserviceable": {
           "delivery_fee": null,
@@ -68,28 +67,27 @@
       "display_name": "PharmEasy",
       "serviceable": true,
       "fee_type": "tier_based",
-      "platform_fee": 29,
-      "cod_fee": 30,
+      "platform_fee": 0.00,
       "zones": {
         "metro": {
-          "delivery_fee": 49,
-          "free_delivery_threshold": 999,
+          "delivery_fee": 120,
+          "free_delivery_threshold": 400,
           "estimated_days": "1-2 Days"
         },
         "tier2": {
-          "delivery_fee": 59,
-          "free_delivery_threshold": 1099,
-          "estimated_days": "2-4 Days"
+          "delivery_fee": 120,
+          "free_delivery_threshold": 400,
+          "estimated_days": "1-2 Days"
         },
         "tier3": {
-          "delivery_fee": 79,
-          "free_delivery_threshold": 1299,
+          "delivery_fee": 120,
+          "free_delivery_threshold": 400,
           "estimated_days": "4-6 Days"
         },
         "remote": {
-          "delivery_fee": 129,
-          "free_delivery_threshold": 1999,
-          "estimated_days": "7+ Days"
+          "delivery_fee": 160,
+          "free_delivery_threshold": 400,
+          "estimated_days": "4-6 Days"
         },
         "unserviceable": {
           "delivery_fee": null,
@@ -103,28 +101,27 @@
       "display_name": "Apollo 24|7",
       "serviceable": true,
       "fee_type": "tier_based",
-      "platform_fee": 10,
-      "cod_fee": 0,
+      "platform_fee": 0.00,
       "zones": {
         "metro": {
-          "delivery_fee": 25,
+          "delivery_fee": 80,
           "free_delivery_threshold": 199,
           "estimated_days": "10-30 Mins / 1 Day"
         },
         "tier2": {
-          "delivery_fee": 35,
-          "free_delivery_threshold": 499,
+          "delivery_fee": 80,
+          "free_delivery_threshold": 200,
           "estimated_days": "1-2 Days"
         },
         "tier3": {
-          "delivery_fee": 50,
-          "free_delivery_threshold": 750,
+          "delivery_fee": 100,
+          "free_delivery_threshold": 200,
           "estimated_days": "3-5 Days"
         },
         "remote": {
-          "delivery_fee": 99,
-          "free_delivery_threshold": 1200,
-          "estimated_days": "5-7 Days"
+          "delivery_fee": 100,
+          "free_delivery_threshold": 200,
+          "estimated_days": "4-6 Days"
         },
         "unserviceable": {
           "delivery_fee": null,
@@ -138,27 +135,26 @@
       "display_name": "Netmeds",
       "serviceable": true,
       "fee_type": "tiered_order_value",
-      "platform_fee": 15,
-      "cod_fee": 25,
+      "platform_fee": 0.00,
       "zones": {
         "metro": {
-          "delivery_fee": 29,
+          "delivery_fee": 30,
           "free_delivery_threshold": 500,
           "estimated_days": "1-2 Days"
         },
         "tier2": {
-          "delivery_fee": 49,
+          "delivery_fee": 30,
           "free_delivery_threshold": 500,
           "estimated_days": "2-3 Days"
         },
         "tier3": {
-          "delivery_fee": 69,
+          "delivery_fee": 40,
           "free_delivery_threshold": 500,
           "estimated_days": "3-5 Days"
         },
         "remote": {
-          "delivery_fee": 99,
-          "free_delivery_threshold": 1000,
+          "delivery_fee": 40,
+          "free_delivery_threshold": 500,
           "estimated_days": "5-7 Days"
         },
         "unserviceable": {
@@ -167,34 +163,33 @@
           "estimated_days": "Non-serviceable"
         }
       },
-      "notes": "Order value < ₹250 incurs ₹69 delivery; ₹250–₹499 incurs ₹29; ₹500+ is free for non-NFM users in Metros."
+      "notes": "Order value < ₹250 incurs ₹39 delivery; ₹250–₹499 incurs ₹29; ₹500+ is free for non-NFM users in Metros."
     },
     "truemeds": {
       "display_name": "Truemeds",
       "serviceable": true,
       "fee_type": "flat_order_value",
-      "platform_fee": 0,
-      "cod_fee": 19,
+      "platform_fee": 11,
       "zones": {
         "metro": {
-          "delivery_fee": 29,
-          "free_delivery_threshold": 500,
+          "delivery_fee": 39,
+          "free_delivery_threshold": 400,
           "estimated_days": "1-2 Days"
         },
         "tier2": {
-          "delivery_fee": 39,
+          "delivery_fee": 110,
           "free_delivery_threshold": 500,
-          "estimated_days": "2-4 Days"
+          "estimated_days": "1-2 Days"
         },
         "tier3": {
-          "delivery_fee": 49,
+          "delivery_fee": 110,
           "free_delivery_threshold": 500,
-          "estimated_days": "4-6 Days"
+          "estimated_days": "1-2 Days"
         },
         "remote": {
-          "delivery_fee": 89,
-          "free_delivery_threshold": 1000,
-          "estimated_days": "6-8 Days"
+          "delivery_fee": 110,
+          "free_delivery_threshold": 500,
+          "estimated_days": "4-5 Days"
         },
         "unserviceable": {
           "delivery_fee": null,
@@ -208,23 +203,22 @@
       "display_name": "MedPlus Mart",
       "serviceable": true,
       "fee_type": "store_pickup_or_delivery",
-      "platform_fee": 0,
-      "cod_fee": 0,
+      "platform_fee": 0.00,
       "zones": {
         "metro": {
-          "delivery_fee": 35,
-          "free_delivery_threshold": 500,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 50,
           "estimated_days": "Same Day / Store Pickup"
         },
         "tier2": {
-          "delivery_fee": 45,
-          "free_delivery_threshold": 750,
-          "estimated_days": "1-2 Days"
+          "delivery_fee": 0,
+          "free_delivery_threshold": 200,
+          "estimated_days": "Same Day / Store Pickup"
         },
         "tier3": {
-          "delivery_fee": 60,
-          "free_delivery_threshold": 1000,
-          "estimated_days": "2-4 Days"
+          "delivery_fee": 0.00,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable (Store pickup only)"
         },
         "remote": {
           "delivery_fee": null,
@@ -244,27 +238,26 @@
       "serviceable": true,
       "fee_type": "flat_order_value",
       "platform_fee": 0,
-      "cod_fee": 20,
       "zones": {
         "metro": {
-          "delivery_fee": 50,
-          "free_delivery_threshold": 850,
+          "delivery_fee": 75,
+          "free_delivery_threshold": 300,
           "estimated_days": "1-2 Days"
         },
         "tier2": {
-          "delivery_fee": 50,
-          "free_delivery_threshold": 850,
+          "delivery_fee": 75,
+          "free_delivery_threshold": 300,
           "estimated_days": "2-4 Days"
         },
         "tier3": {
-          "delivery_fee": 60,
-          "free_delivery_threshold": 850,
-          "estimated_days": "4-6 Days"
+          "delivery_fee": 75,
+          "free_delivery_threshold": 300,
+          "estimated_days": "3-4 Days"
         },
         "remote": {
-          "delivery_fee": 100,
-          "free_delivery_threshold": 1500,
-          "estimated_days": "6-9 Days"
+          "delivery_fee": 75,
+          "free_delivery_threshold": 300,
+          "estimated_days": "4-5 Days"
         },
         "unserviceable": {
           "delivery_fee": null,
@@ -279,7 +272,6 @@
       "serviceable": true,
       "fee_type": "no_free_shipping_tiered",
       "platform_fee": 0,
-      "cod_fee": 99,
       "zones": {
         "metro": {
           "delivery_fee": 119,
@@ -314,26 +306,25 @@
       "serviceable": true,
       "fee_type": "high_threshold_flat",
       "platform_fee": 0,
-      "cod_fee": 50,
       "zones": {
         "metro": {
-          "delivery_fee": 100,
-          "free_delivery_threshold": 1000,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "2-4 Days"
         },
         "tier2": {
-          "delivery_fee": 100,
-          "free_delivery_threshold": 1000,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "3-5 Days"
         },
         "tier3": {
-          "delivery_fee": 120,
-          "free_delivery_threshold": 1200,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "5-7 Days"
         },
         "remote": {
-          "delivery_fee": 180,
-          "free_delivery_threshold": 2000,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "7-10 Days"
         },
         "unserviceable": {
@@ -348,27 +339,26 @@
       "display_name": "eMedicalwala",
       "serviceable": true,
       "fee_type": "weight_and_value_based",
-      "platform_fee": 10,
-      "cod_fee": 40,
+      "platform_fee": 0.00,
       "zones": {
         "metro": {
           "delivery_fee": 50,
-          "free_delivery_threshold": 750,
+          "free_delivery_threshold": 300,
           "estimated_days": "2-3 Days"
         },
         "tier2": {
-          "delivery_fee": 65,
-          "free_delivery_threshold": 850,
+          "delivery_fee": 50,
+          "free_delivery_threshold": 500,
           "estimated_days": "3-5 Days"
         },
         "tier3": {
-          "delivery_fee": 85,
+          "delivery_fee": 100,
           "free_delivery_threshold": 1000,
           "estimated_days": "5-7 Days"
         },
         "remote": {
           "delivery_fee": 150,
-          "free_delivery_threshold": 1800,
+          "free_delivery_threshold": 1000,
           "estimated_days": "7-12 Days"
         },
         "unserviceable": {
@@ -384,7 +374,6 @@
       "serviceable": true,
       "fee_type": "flat_order_value",
       "platform_fee": 0,
-      "cod_fee": 30,
       "zones": {
         "metro": {
           "delivery_fee": 45,
@@ -397,8 +386,8 @@
           "estimated_days": "3-5 Days"
         },
         "tier3": {
-          "delivery_fee": 65,
-          "free_delivery_threshold": 1200,
+          "delivery_fee": 45,
+          "free_delivery_threshold": 1000,
           "estimated_days": "5-7 Days"
         },
         "remote": {
@@ -419,26 +408,25 @@
       "serviceable": true,
       "fee_type": "flat_order_value",
       "platform_fee": 0,
-      "cod_fee": 40,
       "zones": {
         "metro": {
           "delivery_fee": 50,
           "free_delivery_threshold": 500,
-          "estimated_days": "2-4 Days"
+          "estimated_days": "1-2 Days"
         },
         "tier2": {
-          "delivery_fee": 60,
-          "free_delivery_threshold": 750,
+          "delivery_fee": 50,
+          "free_delivery_threshold": 500,
           "estimated_days": "3-6 Days"
         },
         "tier3": {
           "delivery_fee": 80,
           "free_delivery_threshold": 1000,
-          "estimated_days": "5-8 Days"
+          "estimated_days": "4-5 Days"
         },
         "remote": {
-          "delivery_fee": 140,
-          "free_delivery_threshold": 1500,
+          "delivery_fee": 100,
+          "free_delivery_threshold": 1000,
           "estimated_days": "8-12 Days"
         },
         "unserviceable": {
@@ -454,25 +442,24 @@
       "serviceable": true,
       "fee_type": "volumetric_weight_b2b",
       "platform_fee": 0,
-      "cod_fee": 100,
       "zones": {
         "metro": {
-          "delivery_fee": 80,
-          "free_delivery_threshold": 2500,
+          "delivery_fee": 50,
+          "free_delivery_threshold": 488,
           "estimated_days": "2-4 Days"
         },
         "tier2": {
           "delivery_fee": 100,
-          "free_delivery_threshold": 3000,
+          "free_delivery_threshold": 488,
           "estimated_days": "4-6 Days"
         },
         "tier3": {
-          "delivery_fee": 150,
-          "free_delivery_threshold": 5000,
+          "delivery_fee": 100,
+          "free_delivery_threshold": 488,
           "estimated_days": "6-8 Days"
         },
         "remote": {
-          "delivery_fee": 250,
+          "delivery_fee": null,
           "free_delivery_threshold": null,
           "estimated_days": "8-14 Days"
         },
