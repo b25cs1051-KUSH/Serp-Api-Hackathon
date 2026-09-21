@@ -1,0 +1,477 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PharmEasy / SerpAPI Hackathon — pharmacy delivery-cost estimation knowledge base
+  Research date: 2026-09-21 (India, IST)
+
+  IMPORTANT DESIGN NOTE:
+  Do NOT classify a user's delivery zone from only the first 1-2 PIN digits.
+  Indian PINs are 6 digits; the first digit identifies a postal region, the first two
+  identify a postal circle/sub-region, and the first three identify a sorting/revenue district.
+  Postal geography is NOT the same thing as metro/Tier-1/Tier-2/Tier-3/remote classification.
+  Recommended flow:
+    full_pincode -> India Post / maintained locality dataset -> city/district -> app tier -> platform rule.
+  Keep the exact 6-digit PIN for serviceability because pharma platforms may accept/reject specific PINs.
+
+  All monetary values are INR. null means "not publicly disclosed / not stable enough to hard-code".
+  "estimated" values below are for an estimator, NOT guaranteed checkout prices.
+  A final checkout total remains the source of truth.
+-->
+<pharmeasy_delivery_knowledge_base version="1.0" researched_on="2026-09-21">
+
+  <pin_zone_model>
+    <recommended_resolution>
+      <step>Validate that input is a 6-digit Indian PIN.</step>
+      <step>Resolve the full PIN to post office, locality, district, state and city/urban area.</step>
+      <step>Classify the resolved locality using a maintained city-tier dataset, not PIN prefix alone.</step>
+      <step>Separately query platform-specific serviceability when possible; serviceability can differ by platform and product.</step>
+      <step>Use the platform's published delivery rule as the primary estimate. Use generic zone fallback only when the platform publishes no better rule.</step>
+    </recommended_resolution>
+    <india_post_pin_structure source="https://www.indiapost.gov.in/digipin">
+      <digit_range digits="1" meaning="postal region" />
+      <digit_range digits="1-2" meaning="postal circle / sub-region" />
+      <digit_range digits="1-3" meaning="sorting / revenue district" />
+      <digit_range digits="4-6" meaning="delivery post office" />
+    </india_post_pin_structure>
+    <seed_metro_prefixes note="Seed only; not an exhaustive city-PIN list and not sufficient by itself for tier classification.">
+      <prefix city="Delhi" pin3="110" />
+      <prefix city="Mumbai" pin3="400" />
+      <prefix city="Bengaluru" pin3="560" />
+      <prefix city="Chennai" pin3="600" />
+      <prefix city="Hyderabad" pin3="500" />
+      <prefix city="Kolkata" pin3="700" />
+      <prefix city="Ahmedabad" pin3="380" />
+      <prefix city="Pune" pin3="411" />
+    </seed_metro_prefixes>
+    <postal_region_prefixes>
+      <!-- These are postal regions, NOT urban tiers. -->
+      <region first_digit="1" states="Delhi;Haryana;Punjab;Himachal Pradesh;Jammu &amp; Kashmir;Ladakh;Chandigarh" />
+      <region first_digit="2" states="Uttar Pradesh;Uttarakhand" />
+      <region first_digit="3" states="Rajasthan;Gujarat;Daman &amp; Diu;Dadra &amp; Nagar Haveli" />
+      <region first_digit="4" states="Maharashtra;Madhya Pradesh;Chhattisgarh;Goa" />
+      <region first_digit="5" states="Andhra Pradesh;Telangana;Karnataka" />
+      <region first_digit="6" states="Tamil Nadu;Kerala;Puducherry;Lakshadweep" />
+      <region first_digit="7" states="West Bengal;Odisha;North-Eastern states;Andaman &amp; Nicobar;Sikkim" />
+      <region first_digit="8" states="Bihar;Jharkhand" />
+      <region first_digit="9" states="Army Postal Service / field post" />
+    </postal_region_prefixes>
+    <tier_definition>
+      <metro>Use a maintained list of major metropolitan urban areas or the project's selected metro definition.</metro>
+      <tier_1>Use a maintained city-tier dataset; do not derive solely from postal prefix.</tier_1>
+      <tier_2>Use a maintained city-tier dataset; do not derive solely from postal prefix.</tier_2>
+      <tier_3>Use a maintained city-tier dataset; do not derive solely from postal prefix.</tier_3>
+      <remote>Prefer platform-specific serviceability / courier outcome. Remote should not be inferred merely because the PIN starts with a particular digit.</remote>
+      <unserviceable>Represent as a hard serviceability result, not as a high delivery-fee estimate.</unserviceable>
+    </tier_definition>
+    <source>https://www.indiapost.gov.in/rti/pincodelist</source>
+    <source>https://www.indiapost.gov.in/VAS/Pages/Find-Pincode.aspx</source>
+    <source>https://github.com/IndiaPost/pin</source>
+  </pin_zone_model>
+
+  <estimator_logic>
+    <!-- Suggested calculation for a search result with item price P and quantity Q. -->
+    <base_formula>estimated_total = item_subtotal_after_known_search_discounts + estimated_delivery_fee + known_platform_or_handling_fee + known_COD_fee</base_formula>
+    <rule>Do not subtract unverified coupon discounts.</rule>
+    <rule>Do not treat a membership benefit as active unless the user has selected/declared that membership.</rule>
+    <rule>If the platform says fees are shown only at checkout, return a fee range or null rather than fabricating a number.</rule>
+    <rule>For weight-based platforms, estimate package weight from product net quantity plus a configurable packaging allowance; mark the estimate lower-confidence.</rule>
+    <rule>For platforms with explicit order-value slabs, apply the slab after known coupons if the policy says "after coupon".</rule>
+    <rule>If a platform/product is not serviceable for the PIN, mark the seller unavailable instead of adding a large delivery fee.</rule>
+    <rule>Keep observed_policy_date and source URL with every rule so the dataset can be refreshed.</rule>
+  </estimator_logic>
+
+  <platforms>
+
+    <platform id="tata_1mg" name="Tata 1mg" website="https://www.1mg.com" confidence="medium">
+      <serviceability>India-wide platform; availability and final delivery charges are seller/cart/pincode dependent. Product pages disclose additional packaging/handling/shipping/delivery charges before purchase.</serviceability>
+      <delivery_fee_model type="dynamic" basis="pincode, cart, seller, product/order conditions">
+        <published_universal_fee>null</published_universal_fee>
+        <published_universal_free_delivery_threshold>null</published_universal_free_delivery_threshold>
+      </delivery_fee_model>
+      <membership name="Care Plan">
+        <free_shipping_threshold current_published_general_plan_inr="249" note="Current generic Care Plan page says no shipping charges on orders above ₹249 and limited free-shipping benefits below the threshold. Partner/older pages show different thresholds; do not merge those into the general rule." />
+        <other_benefit>Rapid same-day/next-day delivery on available medicines in selected cities.</other_benefit>
+      </membership>
+      <fees>
+        <platform_fee>Not published as a universal fixed fee.</platform_fee>
+        <handling_fee observed_inr="47.50" scope="A product/SKU named 'Handling Fee' shown for Gurgaon" use_as_default="false" note="Observed charge is not evidence of a universal per-order fee." />
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>Dynamic; product pages show exact delivery date/time for the chosen location. Rapid same-day/next-day is available in selected cities.</eta>
+      <quantity_dependency>Cart/order value can affect promotions and free-shipping eligibility; product-specific limits may apply.</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <estimator_default_rule>Use pincode-specific/search-result ETA when available; otherwise set delivery fee to unknown/dynamic rather than using a hard metro/remote number.</estimator_default_rule>
+      <sources>
+        <source>https://www.1mg.com/tnc/</source>
+        <source>https://www.1mg.com/subscription-plan/subscriptions</source>
+        <source>https://www.1mg.com/otc/handling-fee-otc1073016</source>
+      </sources>
+    </platform>
+
+    <platform id="apollo247" name="Apollo 24/7 / Apollo Pharmacy" website="https://www.apollo247.com" confidence="medium">
+      <serviceability>Shipping address must be in India. The policy says delivery time can vary with area, distance from hub, demand, product availability and logistics; medicine interstate fulfilment may use external delivery partners.</serviceability>
+      <delivery_fee_model type="dynamic" basis="pincode, order, membership, delivery mode">
+        <published_universal_fee>null</published_universal_fee>
+        <published_universal_free_delivery_threshold_for_circle_members_inr>199</published_universal_free_delivery_threshold_for_circle_members_inr>
+      </delivery_fee_model>
+      <membership name="CIRCLE" active_officially_published_rule="true">
+        <free_delivery_threshold_inr scope="CIRCLE members">199</free_delivery_threshold_inr>
+        <fast_delivery>Orders can be delivered very quickly in supported locations; membership material describes doorstep delivery in about 2 hours for qualifying orders.</fast_delivery>
+      </membership>
+      <fees>
+        <platform_fee>null</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>Best-effort and location-dependent; no guaranteed exact delivery time in policy.</eta>
+      <quantity_dependency>true</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <interstate_medicine_note>Official terms state APL does not make inter-state medicine deliveries directly; inter-state medicine delivery is fulfilled through external delivery partners.</interstate_medicine_note>
+      <estimator_default_rule>For non-members, use a dynamic/unknown delivery fee unless the search/cart flow exposes one. For CIRCLE members, suppress delivery fee for orders above ₹199 where the membership benefit applies.</estimator_default_rule>
+      <sources>
+        <source>https://www.apollopharmacy.in/medicine-delivery-policy</source>
+        <source>https://www.apollo247.com/landing-page/terms-noBg.htm</source>
+        <source>https://www.apollo247.com/blog/article/apollo-247-circle-membership-benefits</source>
+      </sources>
+    </platform>
+
+    <platform id="medplusmart" name="MedPlus Mart" website="https://www.medplusmart.com" confidence="low">
+      <serviceability>Online medicine delivery is available through the MedPlus ecosystem, but current public fee rules were not found in a stable official text table during this research.</serviceability>
+      <delivery_fee_model type="dynamic_unknown" basis="order value, location, delivery method likely determine final amount">
+        <published_universal_fee>null</published_universal_fee>
+        <published_universal_free_delivery_threshold>null</published_universal_free_delivery_threshold>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>null</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>Current official fee/ETA table not found in crawlable public policy text.</eta>
+      <quantity_dependency>Likely through order-value/cart conditions, but no current universal rule verified.</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <estimator_default_rule>Return a dynamic-fee estimate and request/perform pincode/cart verification. Do not hard-code historical ₹20-₹40 ranges from older industry/IPO material as current policy.</estimator_default_rule>
+      <sources>
+        <source>https://www.medplusmart.com</source>
+        <source>https://blog.medplusmart.com/how-to-choose-the-right-online-pharmacy/</source>
+      </sources>
+    </platform>
+
+    <platform id="medizinhub" name="MedizinHub" website="https://www.medizinhub.com" confidence="medium_low">
+      <serviceability>Official delivery policy claims nationwide delivery including metro, town, village and remote areas through courier partners.</serviceability>
+      <delivery_fee_model type="weight_and_destination" basis="package weight + destination">
+        <eligibility_note>Policy uses the phrase "Free Delivery on eligible medicine orders nationwide" but separately publishes shipping charges. Eligibility/threshold should be treated as a checkout-dependent condition.</eligibility_note>
+        <special_pincode area="Chromepet" pincodes="600044,600045" below_order_value_inr="250" charge_model="weight_based" />
+        <other_states>
+          <band max_weight_grams="200" fee_inr="99" />
+          <band min_weight_grams="201" max_weight_grams="500" fee_inr="119" />
+          <band min_weight_grams="501" max_weight_grams="1000" fee_inr="179" />
+          <band min_weight_grams="1001" fee_inr="249" />
+        </other_states>
+        <raw_policy_warning>Published Tamil Nadu and border-state rows contain duplicated/ambiguous weight labels and should not be copied blindly into production logic. The Rest-of-India table is internally clearer.</raw_policy_warning>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>Browsing fee currently 0 per published fees policy.</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>COD available up to ₹10,000, but location/product restrictions may apply; no COD fee published.</cod_fee>
+      </fees>
+      <eta>
+        <metro>2-4 business days</metro>
+        <non_metro>3-7 business days</non_metro>
+        <remote>May take longer depending on courier availability</remote>
+      </eta>
+      <quantity_dependency>true_weight_of_cart</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <estimator_default_rule>Use exact package-weight model where product/package weights are known. Otherwise use an uncertain range; do not imply universal free delivery from the headline alone.</estimator_default_rule>
+      <sources>
+        <source>https://www.medizinhub.com/delivery-policy</source>
+        <source>https://www.medizinhub.com/fees-and-payments</source>
+        <source>https://www.medizinhub.com/faq</source>
+      </sources>
+    </platform>
+
+    <platform id="chemist180" name="Chemist180" website="https://chemist180.com" confidence="medium">
+      <serviceability>Official site asks the user to enter a pincode to see product availability. The platform advertises delivery across India.</serviceability>
+      <delivery_fee_model type="dynamic_unknown" basis="pincode and order; exact current rate not published in stable crawlable policy text">
+        <published_universal_fee>null</published_universal_fee>
+        <published_universal_free_delivery_threshold>null</published_universal_free_delivery_threshold>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>null</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>
+        <Ahmedabad>same-day</Ahmedabad>
+        <Gujarat>next-day</Gujarat>
+        <major_metro_cities>next-day is advertised subject to service availability</major_metro_cities>
+      </eta>
+      <quantity_dependency>Unknown from published policy.</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <special_rule>FAQ says the final order amount can change after order confirmation when a newly procured batch has a changed MRP. This matters for the project's displayed-price disclaimer.</special_rule>
+      <estimator_default_rule>Use pincode to check product availability; keep delivery fee dynamic unless cart flow exposes the exact amount.</estimator_default_rule>
+      <sources>
+        <source>https://chemist180.com/</source>
+        <source>https://chemist180.com/products</source>
+        <source>https://chemist180.com/about-us</source>
+      </sources>
+    </platform>
+
+    <platform id="emedicalwala" name="eMedicalwala" website="https://www.emedicalwala.com" confidence="medium">
+      <serviceability>Homepage and shipping policy explicitly support pincode checking; homepage reports 20K+ pincodes serviced for May 2026.</serviceability>
+      <delivery_fee_model type="flat_unknown_amount" basis="shipping method; pincode/serviceability">
+        <shipping_method>delivery within 4-5 working days</shipping_method>
+        <shipping_fee>flat shipping rates; exact rupee amount not published in the crawlable shipping policy.</shipping_fee>
+        <published_universal_free_delivery_threshold>null</published_universal_free_delivery_threshold>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>null</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>4-5 working days (estimate).</eta>
+      <quantity_dependency>Not published; shipping policy says flat rate, not item/quantity pricing.</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <estimator_default_rule>Model delivery as a flat but unknown amount, then replace with pincode/cart checkout value when available.</estimator_default_rule>
+      <sources>
+        <source>https://www.emedicalwala.com/shipping-and-delivery-policy/</source>
+        <source>https://www.emedicalwala.com/about-us/</source>
+      </sources>
+    </platform>
+
+    <platform id="medivik" name="Medivik" website="https://www.medivik.com" confidence="high">
+      <serviceability>Platform says medicines are delivered through vendors at the customer's doorstep; cart is available for online calculation.</serviceability>
+      <delivery_fee_model type="flat_until_threshold" basis="cart value">
+        <standard_delivery_fee_inr>45</standard_delivery_fee_inr>
+        <free_delivery_threshold_inr>1000</free_delivery_threshold_inr>
+        <observed_examples>Cart pages showed ₹45 shipping and messages such as "Add More Products Worth ₹302 for Free Delivery" at discounted cart value ₹697.38, implying a ₹1000 threshold.</observed_examples>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>null</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>2-4 days tentatively from date of dispatch.</eta>
+      <quantity_dependency>true_through_cart_value</quantity_dependency>
+      <location_dependency>Potentially; platform is marketplace/vendor based, so serviceability should still be verified.</location_dependency>
+      <prescription>true</prescription>
+      <estimator_default_rule>Apply ₹45 shipping when discounted cart value is below ₹1000; use ₹0 when at/above ₹1000, unless a pincode/order-level exception is exposed at checkout.</estimator_default_rule>
+      <sources>
+        <source>https://www.medivik.com/carts</source>
+        <source>https://www.medivik.com/carts/shopnow/listril_5_tablet</source>
+        <source>https://www.medivik.com/pages/term</source>
+      </sources>
+    </platform>
+
+    <platform id="kogland" name="Kogland Commerce" website="https://kogland.com" confidence="low_medium">
+      <serviceability>App listing describes medicines and medical supplies delivered to homes across India / used by doctors and hospitals across India.</serviceability>
+      <delivery_fee_model type="unknown" basis="checkout/pincode">
+        <published_universal_fee>null</published_universal_fee>
+        <published_universal_free_delivery_threshold>null</published_universal_free_delivery_threshold>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee_inr source_note="The official app listing explicitly advertises no platform charges and no hidden fees.">0</platform_fee_inr>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>Advertised as fast delivery; no stable nationwide numeric ETA found in public source.</eta>
+      <quantity_dependency>Unknown.</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true_for_restricted_products</prescription>
+      <estimator_default_rule>Assume platform fee ₹0, but keep delivery fee dynamic/unknown and request pincode/cart confirmation.</estimator_default_rule>
+      <sources>
+        <source>https://play.google.com/store/apps/details?id=com.kogland.app</source>
+        <source>https://apps.apple.com/in/app/kogland-health-medicine/id6758986118</source>
+        <source>https://business-acceptance-ce24.kogland.net/wishlist/</source>
+      </sources>
+    </platform>
+
+    <platform id="dawaadost" name="DawaaDost" website="https://www.dawaadost.com" confidence="high">
+      <serviceability>Product pages advertise 2-4 day delivery PAN India for sampled products.</serviceability>
+      <delivery_fee_model type="threshold" basis="order value">
+        <free_delivery_threshold_inr>850</free_delivery_threshold_inr>
+        <below_threshold_fee>null</below_threshold_fee>
+        <note>Homepage/app listing explicitly says free home delivery on orders worth ₹850 and above.</note>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>null</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>2-4 days PAN India on sampled product pages.</eta>
+      <quantity_dependency>true_through_order_value</quantity_dependency>
+      <location_dependency>true_serviceability_but_nationwide_claim</location_dependency>
+      <prescription>true_for_rx</prescription>
+      <estimator_default_rule>Use ₹0 delivery for cart/order value >= ₹850; below threshold, leave delivery fee unknown unless checkout/policy exposes a current number.</estimator_default_rule>
+      <sources>
+        <source>https://www.dawaadost.com/</source>
+        <source>https://www.dawaadost.com/medicine/uvicoz-ir-sunscreen-gel-50gm</source>
+        <source>https://play.google.com/store/apps/details?id=com.dawaadost.dawaadost</source>
+      </sources>
+    </platform>
+
+    <platform id="magicine_pharma" name="Magicine Pharma" website="https://www.magicinepharma.com" confidence="high">
+      <serviceability>Official policy says domestic delivery covers major metros, Tier 2/3 cities and most remote PIN codes; final serviceability is confirmed against address/PIN.</serviceability>
+      <delivery_fee_model type="order_value_tier_after_coupon">
+        <band max_order_value_after_coupon_inr="1299" delivery_fee_inr="119" cod_fee_inr="99" />
+        <band min_order_value_after_coupon_inr="1300" max_order_value_after_coupon_inr="3998" delivery_fee_inr="99" cod_fee_inr="149" />
+        <band min_order_value_after_coupon_inr="3999" delivery_fee_inr="69" cod_allowed="false" />
+        <free_delivery_threshold>null</free_delivery_threshold>
+        <general_product_cart_fee_inr note="Flat ₹199 shipping when any general product such as vitamins/wellness/personal care is in the cart.">199</general_product_cart_fee_inr>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>null</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>₹99 or ₹149 depending on order-value tier; COD disabled for ₹3999+.</cod_fee>
+      </fees>
+      <eta>
+        <prescription_processing>2-4 business days before dispatch in typical cases (1-2 verification + 1-2 packing).</prescription_processing>
+        <metro>2-3 business days after dispatch</metro>
+        <tier_2_3>3-5 business days after dispatch</tier_2_3>
+        <remote>5-7 business days after dispatch</remote>
+      </eta>
+      <quantity_dependency>true_through_order_value_and_cart_contents</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <estimator_default_rule>Apply exact order-value slab after coupons. Add COD fee only when user chooses COD. If cart contains any general product, use ₹199 delivery instead of medicine-only slab.</estimator_default_rule>
+      <sources>
+        <source>https://www.magicinepharma.com/shipping-policy</source>
+      </sources>
+    </platform>
+
+    <platform id="pharmeasy" name="PharmEasy" website="https://pharmeasy.in" confidence="medium">
+      <serviceability>Platform terms make delivery/dispatch commercial terms dependent on third-party pharmacies/sellers and the final bill summary. Pincode/serviceability and seller availability can therefore affect checkout.</serviceability>
+      <delivery_fee_model type="dynamic" basis="pincode, seller, cart, delivery conditions">
+        <published_universal_fee>null</published_universal_fee>
+        <published_universal_free_delivery_threshold_for_plus_member_inr>499</published_universal_free_delivery_threshold_for_plus_member_inr>
+      </delivery_fee_model>
+      <membership name="PharmEasy Plus">
+        <free_delivery_threshold_inr scope="medicine and healthcare orders, subject to membership terms">499</free_delivery_threshold_inr>
+        <convenience_fee_benefit>Official membership page advertises zero convenience fees.</convenience_fee_benefit>
+      </membership>
+      <fees>
+        <platform_fee>Terms explicitly allow platform fees, delivery charges and other applicable fees; amount is shown in final Bill Summary.</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>Example location pages say medicines are promised within 7 business days or sooner; actual ETA depends on pincode/product/order.</eta>
+      <quantity_dependency>true</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <estimator_default_rule>Do not hard-code a universal non-member delivery fee. For Plus members and eligible orders above ₹499, use ₹0 delivery where the membership benefit applies; otherwise retain dynamic/unknown.</estimator_default_rule>
+      <sources>
+        <source>https://pharmeasy.in/legal/terms-and-conditions</source>
+        <source>https://pharmeasy.in/plus</source>
+        <source>https://pharmeasy.in/online-medicine-order/location/city/kishangarh-218</source>
+      </sources>
+    </platform>
+
+    <!-- Additional established online-pharmacy options useful for comparison. -->
+    <platform id="netmeds" name="Netmeds" website="https://www.netmeds.com" confidence="high">
+      <serviceability>Attempts nationwide delivery but explicitly reserves the right to designate unserviceable areas; this is checked at order placement.</serviceability>
+      <delivery_fee_model type="order_value_and_customer_status">
+        <non_nfm_returning_customer>
+          <band max_order_value_inr="249" fee_inr="69" />
+          <band min_order_value_inr="250" max_order_value_inr="499" fee_inr="29" />
+          <band min_order_value_inr="500" fee_inr="0" />
+        </non_nfm_returning_customer>
+        <new_customer>
+          <band max_order_value_inr="249" fee_inr="69" />
+          <band min_order_value_inr="250" fee_inr="0" />
+        </new_customer>
+        <nfm_customer>
+          <band max_order_value_inr="98.99" fee_inr="69" />
+          <band min_order_value_inr="99" fee_inr="0" />
+        </nfm_customer>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>Home page currently advertises ₹0 Platform Fee in some membership/offer messaging; do not assume this is an unconditional universal rule.</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>Depends on PIN/product; Jaipur page, for example, advertises delivery within 2 days to major pincodes.</eta>
+      <quantity_dependency>true_through_order_value</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <unserviceable_rule>Unserviceable areas may be blocked at order time.</unserviceable_rule>
+      <estimator_default_rule>Use customer-status-specific fee table. Apply ₹0 delivery at the published threshold for that status, otherwise the published fee.</estimator_default_rule>
+      <sources>
+        <source>https://www.netmeds.com/faq/general-enquiries</source>
+        <source>https://www.netmeds.com/shipping-and-delivery-policy</source>
+        <source>https://www.netmeds.com/page/order-medicine-online-in-jaipur</source>
+      </sources>
+    </platform>
+
+    <platform id="truemeds" name="Truemeds" website="https://www.truemeds.in" confidence="medium_low">
+      <serviceability>Delivery availability and charges are exposed in the order summary for the user's order/location.</serviceability>
+      <delivery_fee_model type="dynamic_threshold" basis="order value, pincode, cart conditions">
+        <rule>Delivery charges apply to orders below a certain amount; the exact free-delivery threshold is shown on the order summary.</rule>
+        <published_universal_fee>null</published_universal_fee>
+        <published_universal_free_delivery_threshold>null</published_universal_free_delivery_threshold>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>null</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>Dynamic by pincode/order; no stable nationwide numeric table found in current public crawl.</eta>
+      <quantity_dependency>true_through_order_value</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <special_strength>Platform explicitly promotes substitute/generic options, which is useful for the project's alternative-medicine feature; substitutions should preserve salt/strength/form and be shown with a medical-advice disclaimer.</special_strength>
+      <estimator_default_rule>Use dynamic delivery cost from order summary where available; otherwise set unknown. Do not invent a threshold.</estimator_default_rule>
+      <sources>
+        <source>https://www.truemeds.in/</source>
+      </sources>
+    </platform>
+
+    <platform id="medkart" name="Medkart" website="https://www.medkart.in" confidence="medium_high">
+      <serviceability>Official app page advertises 35,000+ PIN codes covered.</serviceability>
+      <delivery_fee_model type="threshold">
+        <free_delivery_threshold_inr>500</free_delivery_threshold_inr>
+        <below_threshold_fee>null</below_threshold_fee>
+      </delivery_fee_model>
+      <fees>
+        <platform_fee>null</platform_fee>
+        <handling_fee>null</handling_fee>
+        <cod_fee>null</cod_fee>
+      </fees>
+      <eta>Fast and reliable delivery advertised; exact ETA varies by pincode/order.</eta>
+      <quantity_dependency>true_through_order_value</quantity_dependency>
+      <location_dependency>true</location_dependency>
+      <prescription>true</prescription>
+      <estimator_default_rule>Use ₹0 delivery for orders over ₹500; below ₹500 keep delivery fee dynamic/unknown.</estimator_default_rule>
+      <sources>
+        <source>https://www.medkart.in/download-app</source>
+        <source>https://www.medkart.in/store/murlipura-jaipur</source>
+      </sources>
+    </platform>
+
+  </platforms>
+
+  <production_recommendations>
+    <!-- Short notes intended to prevent common implementation errors. -->
+    <note id="1">The user's original metro/standard/remote tables should be fallback estimates only. They should not override platform-specific checkout/serviceability data.</note>
+    <note id="2">Do not equate "remote PIN" with a high first-digit or third-digit PIN. Postal structure and courier economics are different concepts.</note>
+    <note id="3">Track customer state: anonymous/new/returning/member. Netmeds and membership programs show materially different delivery rules.</note>
+    <note id="4">Track cart subtotal AFTER coupons where the platform says its shipping tier uses post-coupon value (Magicine).</note>
+    <note id="5">Track cart contents category: Magicine charges a flat ₹199 if any general merchandise is in the cart.</note>
+    <note id="6">Track package weight when a platform is weight-based (MedizinHub).</note>
+    <note id="7">Track COD separately from delivery. COD can add a fee even when shipping is available, and some high-value orders disable COD (Magicine).</note>
+    <note id="8">Track prescription verification time separately from courier transit time. A 2-4 day ETA can mean 2-4 days before dispatch plus transit, depending on the platform.</note>
+    <note id="9">For medicine alternatives, compare active salt/composition, strength, dosage form and release pattern before presenting an alternative; brand substitution is not simply a price comparison.</note>
+    <note id="10">For SerpAPI results, store the observed price timestamp, URL, title, seller and any visible shipping statement. A stale SERP/Shopping price should not be treated as a guaranteed checkout price.</note>
+    <note id="11">Recommended output field to the end user: displayed_price, estimated_extra_cost, estimated_total, serviceability_status, ETA, confidence, and "final checkout price may differ".</note>
+  </production_recommendations>
+
+  <research_sources>
+    <source name="India Post PIN directory">https://www.indiapost.gov.in/rti/pincodelist</source>
+    <source name="India Post PIN finder">https://www.indiapost.gov.in/VAS/Pages/Find-Pincode.aspx</source>
+    <source name="India Post PIN repository">https://github.com/IndiaPost/pin</source>
+  </research_sources>
+
+</pharmeasy_delivery_knowledge_base>

@@ -1,0 +1,899 @@
+{
+  "project": "PharmEasy - SerpAPI Hackathon",
+  "version": "2.0",
+  "research_date": "2026-09-21",
+  "currency": "INR",
+  "description": "Delivery/serviceability estimation knowledge base for online medicine price comparison. Values marked null are not reliably published as a universal current rule and should be resolved from pincode/cart/checkout when possible.",
+  "pincode_data": {
+    "input_format": "6-digit Indian PIN code",
+    "exact_lookup_required": true,
+    "official_source": "https://data.gov.in/catalog/all-india-pincode-directory-through-webservice",
+    "official_resource": "https://data.gov.in/resource/all-india-pincode-directory-till-last-month",
+    "reference_mirror": "https://github.com/iaseth/pincodes-india/blob/master/pincodes.json",
+    "reference_valid_pincode_count": 18991,
+    "reference_dataset_note": "The current public mirror used for reference lists 18,991 valid PINs. The Government OGD catalogue is the preferred refresh source; do not treat a static PIN list as permanent.",
+    "resolution_order": [
+      "validate 6 digits",
+      "resolve exact PIN to post office/locality/district/state",
+      "classify locality into metro/tier_1/tier_2/tier_3/remote using maintained city-tier data",
+      "check platform-specific serviceability",
+      "apply platform delivery rule",
+      "use checkout value as final source of truth"
+    ]
+  },
+  "pin_zones": {
+    "metro": {
+      "pin3_prefixes": [
+        "110",
+        "400",
+        "500",
+        "560",
+        "600",
+        "700",
+        "380",
+        "411"
+      ],
+      "cities": [
+        "Delhi / New Delhi",
+        "Mumbai",
+        "Hyderabad",
+        "Bengaluru",
+        "Chennai",
+        "Kolkata",
+        "Ahmedabad",
+        "Pune"
+      ],
+      "classification": "major-metro seed list",
+      "warning": "PIN prefixes are only a heuristic. Resolve the full PIN and locality before using this as a production tier."
+    },
+    "tier_1": {
+      "pin3_prefixes": [
+        "122",
+        "201",
+        "226",
+        "208",
+        "302",
+        "395",
+        "390",
+        "422",
+        "440",
+        "452",
+        "462",
+        "520",
+        "530",
+        "570",
+        "641",
+        "682",
+        "751",
+        "781",
+        "800"
+      ],
+      "cities_or_urban_areas": [
+        "Gurugram",
+        "Noida / Ghaziabad",
+        "Lucknow",
+        "Kanpur",
+        "Jaipur",
+        "Surat",
+        "Vadodara",
+        "Nashik",
+        "Nagpur",
+        "Indore",
+        "Bhopal",
+        "Vijayawada",
+        "Visakhapatnam",
+        "Mysuru",
+        "Coimbatore",
+        "Kochi",
+        "Bhubaneswar",
+        "Guwahati",
+        "Patna"
+      ],
+      "classification": "heuristic large-urban seed list"
+    },
+    "tier_2": {
+      "pin3_prefixes": [],
+      "classification": "Use maintained city-tier table after resolving exact PIN/locality; intentionally not hard-coded by first 1-2 PIN digits."
+    },
+    "tier_3": {
+      "pin3_prefixes": [],
+      "classification": "Fallback for valid serviceable PINs not matched to a maintained metro/tier-1/tier-2/remote locality."
+    },
+    "remote": {
+      "pin3_prefixes": [
+        "190",
+        "191",
+        "192",
+        "193",
+        "194",
+        "744",
+        "682",
+        "791",
+        "792",
+        "793",
+        "794",
+        "795",
+        "796",
+        "797",
+        "798",
+        "799"
+      ],
+      "areas": [
+        "Jammu & Kashmir high-friction postal areas (seed only)",
+        "Andaman & Nicobar Islands",
+        "Lakshadweep",
+        "Arunachal Pradesh / Meghalaya / Manipur / Mizoram / Nagaland / Tripura remote areas (seed only)"
+      ],
+      "classification": "remote-risk seed list, NOT a universal unserviceability list",
+      "warning": "Many urban locations share these prefixes. Exact serviceability must be checked per platform."
+    },
+    "unserviceable": {
+      "pin3_prefixes": [],
+      "classification": "Platform-specific; do not hard-code generic unserviceable PINs. A PIN can be serviceable on one platform and unavailable on another."
+    },
+    "default": "tier_3"
+  },
+  "estimator": {
+    "formula": "estimated_total = advertised_item_total + delivery_fee + platform_fee + handling_fee + cod_fee - known_discount",
+    "unknown_value_policy": "Use null for unknown/dynamic charges and expose confidence rather than guessing.",
+    "checkout_disclaimer": "Final checkout price can differ from the SERP/Shopping advertised price.",
+    "state_to_track": [
+      "pincode",
+      "cart_subtotal_before_coupon",
+      "cart_subtotal_after_coupon",
+      "quantity",
+      "package_weight_if_needed",
+      "customer_status",
+      "membership",
+      "payment_method",
+      "medicine_only_vs_general_merchandise",
+      "observed_timestamp"
+    ]
+  },
+  "platforms": {
+    "tata_1mg": {
+      "name": "Tata 1mg",
+      "website": "https://www.1mg.com",
+      "confidence": "medium",
+      "serviceability": "India-wide platform; availability and final delivery charges are seller/cart/pincode/product dependent.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "dynamic_pincode_cart_seller",
+      "metro": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic; same-day/next-day in selected cities"
+      },
+      "standard": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic; product/location dependent"
+      },
+      "remote": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic; may be longer depending on PIN and seller"
+      },
+      "membership": {
+        "name": "Care Plan",
+        "shipping_threshold_inr": 249,
+        "note": "Current generic plan page says no shipping charges above ₹249; below-threshold benefits can be limited."
+      },
+      "special_rules": [
+        "A product/SKU titled Handling Fee was observed at ₹47.50 in Gurgaon; do not use it as a universal fee.",
+        "Use pincode-specific delivery date/fee if exposed by search/cart."
+      ],
+      "sources": [
+        "https://www.1mg.com/tnc/",
+        "https://www.1mg.com/subscription-plan/subscriptions",
+        "https://www.1mg.com/otc/handling-fee-otc1073016"
+      ]
+    },
+    "apollo247": {
+      "name": "Apollo 24/7 / Apollo Pharmacy",
+      "website": "https://www.apollo247.com",
+      "confidence": "medium",
+      "serviceability": "Shipping address must be in India; area, distance from hub, demand, product availability and logistics can change delivery timing/cost.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "dynamic_pincode_order_membership",
+      "metro": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Location dependent; qualifying CIRCLE orders can be very fast"
+      },
+      "standard": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Location/product dependent"
+      },
+      "remote": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "May be longer; external partners may be used for interstate medicine delivery"
+      },
+      "membership": {
+        "name": "CIRCLE",
+        "shipping_threshold_inr": 199,
+        "note": "Published CIRCLE benefit: free delivery above ₹199 where membership benefit applies."
+      },
+      "special_rules": [
+        "Apollo terms state interstate medicine delivery can be fulfilled through external delivery partners."
+      ],
+      "sources": [
+        "https://www.apollopharmacy.in/medicine-delivery-policy",
+        "https://www.apollo247.com/landing-page/terms-noBg.htm",
+        "https://www.apollo247.com/blog/article/apollo-247-circle-membership-benefits"
+      ]
+    },
+    "medplusmart": {
+      "name": "MedPlus Mart",
+      "website": "https://www.medplusmart.com",
+      "confidence": "low",
+      "serviceability": "Online delivery is available through the MedPlus ecosystem, but no stable current nationwide fee table was found in crawlable official policy text.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "dynamic_unknown",
+      "metro": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic / checkout dependent"
+      },
+      "standard": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic / checkout dependent"
+      },
+      "remote": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic / checkout dependent"
+      },
+      "special_rules": [
+        "Do not hard-code older historical ₹20-₹40 estimates as current policy."
+      ],
+      "sources": [
+        "https://www.medplusmart.com",
+        "https://blog.medplusmart.com/how-to-choose-the-right-online-pharmacy/"
+      ]
+    },
+    "medizinhub": {
+      "name": "MedizinHub",
+      "website": "https://www.medizinhub.com",
+      "confidence": "medium_low",
+      "serviceability": "Official delivery policy claims nationwide delivery including metro, town, village and remote areas via courier partners.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "weight_and_destination",
+      "metro": {
+        "delivery_fee": "weight_and_destination",
+        "free_delivery_threshold": "eligible_orders; checkout-dependent",
+        "platform_fee": 0,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "2-4 business days",
+        "weight_bands_inr": [
+          {
+            "max_weight_grams": 200,
+            "fee": 99
+          },
+          {
+            "min_weight_grams": 201,
+            "max_weight_grams": 500,
+            "fee": 119
+          },
+          {
+            "min_weight_grams": 501,
+            "max_weight_grams": 1000,
+            "fee": 179
+          },
+          {
+            "min_weight_grams": 1001,
+            "fee": 249
+          }
+        ]
+      },
+      "standard": {
+        "delivery_fee": "weight_and_destination",
+        "free_delivery_threshold": "eligible_orders; checkout-dependent",
+        "platform_fee": 0,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "3-7 business days",
+        "weight_bands_inr": [
+          {
+            "max_weight_grams": 200,
+            "fee": 99
+          },
+          {
+            "min_weight_grams": 201,
+            "max_weight_grams": 500,
+            "fee": 119
+          },
+          {
+            "min_weight_grams": 501,
+            "max_weight_grams": 1000,
+            "fee": 179
+          },
+          {
+            "min_weight_grams": 1001,
+            "fee": 249
+          }
+        ]
+      },
+      "remote": {
+        "delivery_fee": "weight_and_destination",
+        "free_delivery_threshold": "eligible_orders; checkout-dependent",
+        "platform_fee": 0,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "May take longer depending on courier availability"
+      },
+      "special_rules": [
+        "Published Rest-of-India weight table is clearer than some state-specific rows in the policy.",
+        "COD is available up to ₹10,000 with restrictions; no universal COD fee was published."
+      ],
+      "sources": [
+        "https://www.medizinhub.com/delivery-policy",
+        "https://www.medizinhub.com/fees-and-payments",
+        "https://www.medizinhub.com/faq"
+      ]
+    },
+    "chemist180": {
+      "name": "Chemist180",
+      "website": "https://chemist180.com",
+      "confidence": "medium",
+      "serviceability": "Site asks for a PIN to see product availability and advertises delivery across India.",
+      "location_dependency": true,
+      "quantity_dependency": null,
+      "prescription_supported": true,
+      "delivery_fee_model": "dynamic_unknown",
+      "metro": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Ahmedabad same-day; major metros next-day where advertised"
+      },
+      "standard": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Usually next-day in Gujarat where advertised"
+      },
+      "remote": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic; PIN dependent"
+      },
+      "special_rules": [
+        "FAQ says final order amount can change after confirmation if newly procured batch MRP changes."
+      ],
+      "sources": [
+        "https://chemist180.com/",
+        "https://chemist180.com/products",
+        "https://chemist180.com/about-us"
+      ]
+    },
+    "emedicalwala": {
+      "name": "eMedicalwala",
+      "website": "https://www.emedicalwala.com",
+      "confidence": "medium",
+      "serviceability": "Pincode checking is supported; homepage reported 20K+ pincodes serviced in May 2026.",
+      "location_dependency": true,
+      "quantity_dependency": false,
+      "prescription_supported": true,
+      "delivery_fee_model": "flat_unknown_amount",
+      "metro": {
+        "delivery_fee": "flat_unknown",
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "4-5 working days"
+      },
+      "standard": {
+        "delivery_fee": "flat_unknown",
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "4-5 working days"
+      },
+      "remote": {
+        "delivery_fee": "flat_unknown",
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "4-5 working days; may vary by PIN"
+      },
+      "special_rules": [
+        "Shipping policy describes flat shipping rates but does not publish a stable universal rupee amount."
+      ],
+      "sources": [
+        "https://www.emedicalwala.com/shipping-and-delivery-policy/",
+        "https://www.emedicalwala.com/about-us/"
+      ]
+    },
+    "medivik": {
+      "name": "Medivik",
+      "website": "https://www.medivik.com",
+      "confidence": "high",
+      "serviceability": "Marketplace/vendor model; medicines are delivered to the customer's doorstep and cart calculates shipping.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "flat_until_threshold",
+      "metro": {
+        "delivery_fee": 45,
+        "free_delivery_threshold": 1000,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "2-4 days from dispatch"
+      },
+      "standard": {
+        "delivery_fee": 45,
+        "free_delivery_threshold": 1000,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "2-4 days from dispatch"
+      },
+      "remote": {
+        "delivery_fee": 45,
+        "free_delivery_threshold": 1000,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "2-4 days from dispatch; verify PIN exceptions"
+      },
+      "special_rules": [
+        "Observed cart messaging indicates ₹45 shipping below ₹1,000 discounted cart value and free delivery at/above ₹1,000."
+      ],
+      "sources": [
+        "https://www.medivik.com/carts",
+        "https://www.medivik.com/carts/shopnow/listril_5_tablet",
+        "https://www.medivik.com/pages/term"
+      ]
+    },
+    "kogland": {
+      "name": "Kogland Commerce",
+      "website": "https://kogland.com",
+      "confidence": "low_medium",
+      "serviceability": "Public app listings describe medicine/medical-supply delivery across India; exact checkout fee remains dynamic.",
+      "location_dependency": true,
+      "quantity_dependency": null,
+      "prescription_supported": true,
+      "delivery_fee_model": "unknown_checkout",
+      "metro": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": 0,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Fast delivery advertised; exact ETA dynamic"
+      },
+      "standard": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": 0,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic"
+      },
+      "remote": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": 0,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic / PIN dependent"
+      },
+      "special_rules": [
+        "Official app listings advertise no platform charges/no hidden fees; do not convert that into zero delivery fee."
+      ],
+      "sources": [
+        "https://play.google.com/store/apps/details?id=com.kogland.app",
+        "https://apps.apple.com/in/app/kogland-health-medicine/id6758986118",
+        "https://business-acceptance-ce24.kogland.net/wishlist/"
+      ]
+    },
+    "dawaadost": {
+      "name": "DawaaDost",
+      "website": "https://www.dawaadost.com",
+      "confidence": "high",
+      "serviceability": "Sample product pages advertise 2-4 day delivery PAN India.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "order_value_threshold",
+      "metro": {
+        "delivery_fee": 0,
+        "free_delivery_threshold": 850,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "2-4 days"
+      },
+      "standard": {
+        "delivery_fee": 0,
+        "free_delivery_threshold": 850,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "2-4 days PAN India"
+      },
+      "remote": {
+        "delivery_fee": 0,
+        "free_delivery_threshold": 850,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "2-4 days advertised; verify exact PIN"
+      },
+      "special_rules": [
+        "Below ₹850, current below-threshold shipping amount was not found in stable public policy text."
+      ],
+      "sources": [
+        "https://www.dawaadost.com/",
+        "https://www.dawaadost.com/medicine/uvicoz-ir-sunscreen-gel-50gm",
+        "https://play.google.com/store/apps/details?id=com.dawaadost.dawaadost"
+      ]
+    },
+    "magicine_pharma": {
+      "name": "Magicine Pharma",
+      "website": "https://www.magicinepharma.com",
+      "confidence": "high",
+      "serviceability": "Domestic delivery covers major metros, Tier 2/3 cities and most remote PIN codes; final serviceability is confirmed against address/PIN.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "order_value_after_coupon",
+      "metro": {
+        "delivery_fee": 119,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": 99,
+        "estimated_days": "2-3 business days after dispatch",
+        "bands": [
+          {
+            "max_order_value_after_coupon": 1299,
+            "delivery_fee": 119,
+            "cod_fee": 99
+          },
+          {
+            "min_order_value_after_coupon": 1300,
+            "max_order_value_after_coupon": 3998,
+            "delivery_fee": 99,
+            "cod_fee": 149
+          },
+          {
+            "min_order_value_after_coupon": 3999,
+            "delivery_fee": 69,
+            "cod_allowed": false
+          }
+        ]
+      },
+      "standard": {
+        "delivery_fee": 119,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": 99,
+        "estimated_days": "3-5 business days after dispatch",
+        "bands": [
+          {
+            "max_order_value_after_coupon": 1299,
+            "delivery_fee": 119,
+            "cod_fee": 99
+          },
+          {
+            "min_order_value_after_coupon": 1300,
+            "max_order_value_after_coupon": 3998,
+            "delivery_fee": 99,
+            "cod_fee": 149
+          },
+          {
+            "min_order_value_after_coupon": 3999,
+            "delivery_fee": 69,
+            "cod_allowed": false
+          }
+        ]
+      },
+      "remote": {
+        "delivery_fee": 119,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": 99,
+        "estimated_days": "5-7 business days after dispatch; serviceability verified by PIN",
+        "bands": [
+          {
+            "max_order_value_after_coupon": 1299,
+            "delivery_fee": 119,
+            "cod_fee": 99
+          },
+          {
+            "min_order_value_after_coupon": 1300,
+            "max_order_value_after_coupon": 3998,
+            "delivery_fee": 99,
+            "cod_fee": 149
+          },
+          {
+            "min_order_value_after_coupon": 3999,
+            "delivery_fee": 69,
+            "cod_allowed": false
+          }
+        ]
+      },
+      "special_rules": [
+        "Order-value slabs are applied after coupons.",
+        "If any general product such as vitamins/wellness/personal care is in cart, shipping is ₹199 instead of medicine-only slab.",
+        "COD is disabled for cart/order value ₹3999+."
+      ],
+      "sources": [
+        "https://www.magicinepharma.com/shipping-policy"
+      ]
+    },
+    "pharmeasy": {
+      "name": "PharmEasy",
+      "website": "https://pharmeasy.in",
+      "confidence": "medium",
+      "serviceability": "Delivery/dispatch terms depend on third-party pharmacies/sellers and final bill summary; pincode and seller availability can alter checkout.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "dynamic_pincode_seller_cart",
+      "metro": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic; selected location pages promise within 7 business days or sooner"
+      },
+      "standard": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic; pincode/product/order dependent"
+      },
+      "remote": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Potentially longer; exact PIN and seller dependent"
+      },
+      "membership": {
+        "name": "PharmEasy Plus",
+        "shipping_threshold_inr": 499,
+        "convenience_fee": 0,
+        "note": "Published membership benefit is subject to membership terms and eligibility."
+      },
+      "special_rules": [
+        "Terms explicitly allow platform fees, delivery charges and other applicable fees; final bill summary is authoritative."
+      ],
+      "sources": [
+        "https://pharmeasy.in/legal/terms-and-conditions",
+        "https://pharmeasy.in/plus",
+        "https://pharmeasy.in/online-medicine-order/location/city/kishangarh-218"
+      ]
+    },
+    "netmeds": {
+      "name": "Netmeds",
+      "website": "https://www.netmeds.com",
+      "confidence": "high",
+      "serviceability": "Attempts nationwide delivery but may designate areas as unserviceable; serviceability can be checked at order time.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "customer_status_and_order_value",
+      "metro": {
+        "delivery_fee": "order_value_and_customer_status",
+        "free_delivery_threshold": "500 returning / 250 new / 99 NFM",
+        "platform_fee": 0,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "PIN/product dependent"
+      },
+      "standard": {
+        "delivery_fee": "order_value_and_customer_status",
+        "free_delivery_threshold": "500 returning / 250 new / 99 NFM",
+        "platform_fee": 0,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "PIN/product dependent"
+      },
+      "remote": {
+        "delivery_fee": "order_value_and_customer_status",
+        "free_delivery_threshold": "500 returning / 250 new / 99 NFM",
+        "platform_fee": 0,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "May be longer; unserviceable PINs can be blocked"
+      },
+      "delivery_slabs": {
+        "non_nfm_returning_customer": [
+          {
+            "max_order_value": 249,
+            "fee": 69
+          },
+          {
+            "min_order_value": 250,
+            "max_order_value": 499,
+            "fee": 29
+          },
+          {
+            "min_order_value": 500,
+            "fee": 0
+          }
+        ],
+        "new_customer": [
+          {
+            "max_order_value": 249,
+            "fee": 69
+          },
+          {
+            "min_order_value": 250,
+            "fee": 0
+          }
+        ],
+        "nfm_customer": [
+          {
+            "max_order_value": 98.99,
+            "fee": 69
+          },
+          {
+            "min_order_value": 99,
+            "fee": 0
+          }
+        ]
+      },
+      "special_rules": [
+        "Do not assume advertised ₹0 platform fee is unconditional for every customer/cart."
+      ],
+      "sources": [
+        "https://www.netmeds.com/faq/general-enquiries",
+        "https://www.netmeds.com/shipping-and-delivery-policy",
+        "https://www.netmeds.com/page/order-medicine-online-in-jaipur"
+      ]
+    },
+    "truemeds": {
+      "name": "Truemeds",
+      "website": "https://www.truemeds.in",
+      "confidence": "medium_low",
+      "serviceability": "Delivery availability and charges are exposed in the order summary for the user's order/location.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "dynamic_threshold",
+      "metro": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic"
+      },
+      "standard": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic by pincode/order"
+      },
+      "remote": {
+        "delivery_fee": null,
+        "free_delivery_threshold": null,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Dynamic / PIN dependent"
+      },
+      "special_rules": [
+        "Exact free-delivery threshold is shown in order summary; no stable current nationwide number was found in crawlable public text.",
+        "Platform promotes substitute/generic options; alternatives should preserve active ingredient, strength and dosage form and be presented with appropriate medical disclaimer."
+      ],
+      "sources": [
+        "https://www.truemeds.in/"
+      ]
+    },
+    "medkart": {
+      "name": "Medkart",
+      "website": "https://www.medkart.in",
+      "confidence": "medium_high",
+      "serviceability": "Official app page advertises 35,000+ PIN codes covered.",
+      "location_dependency": true,
+      "quantity_dependency": true,
+      "prescription_supported": true,
+      "delivery_fee_model": "threshold",
+      "metro": {
+        "delivery_fee": null,
+        "free_delivery_threshold": 500,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Pincode dependent"
+      },
+      "standard": {
+        "delivery_fee": null,
+        "free_delivery_threshold": 500,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Pincode dependent"
+      },
+      "remote": {
+        "delivery_fee": null,
+        "free_delivery_threshold": 500,
+        "platform_fee": null,
+        "handling_fee": null,
+        "cod_fee": null,
+        "estimated_days": "Pincode dependent"
+      },
+      "special_rules": [
+        "Orders over ₹500 have published free-delivery benefit; below ₹500 charge amount was not found as a stable universal figure."
+      ],
+      "sources": [
+        "https://www.medkart.in/download-app",
+        "https://www.medkart.in/store/murlipura-jaipur"
+      ]
+    }
+  },
+  "production_notes": [
+    "Do not equate postal PIN prefix with urban tier; exact locality/city lookup is required for a defensible tier classification.",
+    "Use platform-specific serviceability whenever possible; never turn an unavailable seller into a high delivery fee.",
+    "Track membership and customer status because shipping rules can differ materially.",
+    "For weight-based rules, obtain product/package weight before estimating.",
+    "For order-value slabs, apply the threshold at the correct stage (e.g. after coupon when the policy says so).",
+    "Keep medicine-only and general-merchandise carts separate where a platform changes shipping rules.",
+    "Separate delivery fee from COD fee, convenience/platform fee and handling fee.",
+    "Store the observed SERP/Shopping price timestamp and URL; stale search price is not checkout price.",
+    "Final checkout total remains the source of truth."
+  ]
+}

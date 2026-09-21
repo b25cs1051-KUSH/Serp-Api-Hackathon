@@ -1,0 +1,488 @@
+{
+  "_meta": {
+    "project": "PharmaWatch / Aggregator Engine",
+    "description": "Zonal PIN code mapping and platform checkout price rule engine for Indian e-pharmacies.",
+    "version": "2026.1",
+    "currency": "INR"
+  },
+  "pin_zones": {
+    "metro": {
+      "prefixes": ["11", "12", "20", "38", "40", "41", "50", "56", "60", "70"],
+      "description": "Tier-1 Metro Cities (Delhi NCR, Mumbai, Thane, Pune, Bengaluru, Chennai, Hyderabad, Kolkata, Ahmedabad)"
+    },
+    "tier2": {
+      "prefixes": ["16", "22", "28", "30", "32", "39", "45", "46", "64", "68", "75", "80"],
+      "description": "Tier-2 Major Urban Centers (Chandigarh, Lucknow, Jaipur, Patna, Surat, Indore, Kochi, Coimbatore, Bhubaneswar, Visakhapatnam)"
+    },
+    "tier3": {
+      "prefixes": ["14", "15", "21", "23", "24", "27", "31", "33", "34", "36", "42", "43", "47", "48", "51", "52", "53", "57", "61", "62", "63", "67", "71", "72", "73", "81", "82", "83", "84", "85"],
+      "description": "Tier-3 Towns and District Headquarters across Indian states"
+    },
+    "remote": {
+      "prefixes": ["17", "18", "19", "74", "78", "79"],
+      "description": "Hilly, Island, and Far-Eastern Regions (Himachal Pradesh, J&K, Ladakh, Andaman & Nicobar, North-East states)"
+    },
+    "unserviceable": {
+      "prefixes": ["1941", "7921", "7443"],
+      "description": "Extremely remote high-altitude or restricted border outpost zones"
+    },
+    "default": "tier3"
+  },
+  "platforms": {
+    "tata_1mg": {
+      "display_name": "Tata 1mg",
+      "serviceable": true,
+      "fee_type": "tier_based",
+      "platform_fee": 15,
+      "cod_fee": 25,
+      "zones": {
+        "metro": {
+          "delivery_fee": 25,
+          "free_delivery_threshold": 500,
+          "estimated_days": "1-2 Days"
+        },
+        "tier2": {
+          "delivery_fee": 45,
+          "free_delivery_threshold": 750,
+          "estimated_days": "2-3 Days"
+        },
+        "tier3": {
+          "delivery_fee": 50,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "3-5 Days"
+        },
+        "remote": {
+          "delivery_fee": 99,
+          "free_delivery_threshold": 1500,
+          "estimated_days": "5-8 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Offers express/same-day delivery via local dark stores in select Metros for a nominal surcharge."
+    },
+    "pharmeasy": {
+      "display_name": "PharmEasy",
+      "serviceable": true,
+      "fee_type": "tier_based",
+      "platform_fee": 29,
+      "cod_fee": 30,
+      "zones": {
+        "metro": {
+          "delivery_fee": 49,
+          "free_delivery_threshold": 999,
+          "estimated_days": "1-2 Days"
+        },
+        "tier2": {
+          "delivery_fee": 59,
+          "free_delivery_threshold": 1099,
+          "estimated_days": "2-4 Days"
+        },
+        "tier3": {
+          "delivery_fee": 79,
+          "free_delivery_threshold": 1299,
+          "estimated_days": "4-6 Days"
+        },
+        "remote": {
+          "delivery_fee": 129,
+          "free_delivery_threshold": 1999,
+          "estimated_days": "7+ Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Plus membership removes convenience/platform fees and provides free delivery on orders above ₹499."
+    },
+    "apollo_247": {
+      "display_name": "Apollo 24|7",
+      "serviceable": true,
+      "fee_type": "tier_based",
+      "platform_fee": 10,
+      "cod_fee": 0,
+      "zones": {
+        "metro": {
+          "delivery_fee": 25,
+          "free_delivery_threshold": 199,
+          "estimated_days": "10-30 Mins / 1 Day"
+        },
+        "tier2": {
+          "delivery_fee": 35,
+          "free_delivery_threshold": 499,
+          "estimated_days": "1-2 Days"
+        },
+        "tier3": {
+          "delivery_fee": 50,
+          "free_delivery_threshold": 750,
+          "estimated_days": "3-5 Days"
+        },
+        "remote": {
+          "delivery_fee": 99,
+          "free_delivery_threshold": 1200,
+          "estimated_days": "5-7 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "10-minute delivery active in select metro areas via Apollo retail network; free shipping threshold starts as low as ₹199."
+    },
+    "netmeds": {
+      "display_name": "Netmeds",
+      "serviceable": true,
+      "fee_type": "tiered_order_value",
+      "platform_fee": 15,
+      "cod_fee": 25,
+      "zones": {
+        "metro": {
+          "delivery_fee": 29,
+          "free_delivery_threshold": 500,
+          "estimated_days": "1-2 Days"
+        },
+        "tier2": {
+          "delivery_fee": 49,
+          "free_delivery_threshold": 500,
+          "estimated_days": "2-3 Days"
+        },
+        "tier3": {
+          "delivery_fee": 69,
+          "free_delivery_threshold": 500,
+          "estimated_days": "3-5 Days"
+        },
+        "remote": {
+          "delivery_fee": 99,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "5-7 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Order value < ₹250 incurs ₹69 delivery; ₹250–₹499 incurs ₹29; ₹500+ is free for non-NFM users in Metros."
+    },
+    "truemeds": {
+      "display_name": "Truemeds",
+      "serviceable": true,
+      "fee_type": "flat_order_value",
+      "platform_fee": 0,
+      "cod_fee": 19,
+      "zones": {
+        "metro": {
+          "delivery_fee": 29,
+          "free_delivery_threshold": 500,
+          "estimated_days": "1-2 Days"
+        },
+        "tier2": {
+          "delivery_fee": 39,
+          "free_delivery_threshold": 500,
+          "estimated_days": "2-4 Days"
+        },
+        "tier3": {
+          "delivery_fee": 49,
+          "free_delivery_threshold": 500,
+          "estimated_days": "4-6 Days"
+        },
+        "remote": {
+          "delivery_fee": 89,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "6-8 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Focuses heavily on generic alternatives with aggressive discounts; delivery cost structured per cart total."
+    },
+    "medplus_mart": {
+      "display_name": "MedPlus Mart",
+      "serviceable": true,
+      "fee_type": "store_pickup_or_delivery",
+      "platform_fee": 0,
+      "cod_fee": 0,
+      "zones": {
+        "metro": {
+          "delivery_fee": 35,
+          "free_delivery_threshold": 500,
+          "estimated_days": "Same Day / Store Pickup"
+        },
+        "tier2": {
+          "delivery_fee": 45,
+          "free_delivery_threshold": 750,
+          "estimated_days": "1-2 Days"
+        },
+        "tier3": {
+          "delivery_fee": 60,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "2-4 Days"
+        },
+        "remote": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable (Store pickup only)"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Offers zero delivery fees if selected as 'Store Pickup' at nearest physical MedPlus outlet."
+    },
+    "dawaadost": {
+      "display_name": "Dawaa Dost",
+      "serviceable": true,
+      "fee_type": "flat_order_value",
+      "platform_fee": 0,
+      "cod_fee": 20,
+      "zones": {
+        "metro": {
+          "delivery_fee": 50,
+          "free_delivery_threshold": 850,
+          "estimated_days": "1-2 Days"
+        },
+        "tier2": {
+          "delivery_fee": 50,
+          "free_delivery_threshold": 850,
+          "estimated_days": "2-4 Days"
+        },
+        "tier3": {
+          "delivery_fee": 60,
+          "free_delivery_threshold": 850,
+          "estimated_days": "4-6 Days"
+        },
+        "remote": {
+          "delivery_fee": 100,
+          "free_delivery_threshold": 1500,
+          "estimated_days": "6-9 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Specializes in high-discount generic medicines; standard free home delivery threshold is ₹850 across standard locations."
+    },
+    "magicine_pharma": {
+      "display_name": "Magicine Pharma",
+      "serviceable": true,
+      "fee_type": "no_free_shipping_tiered",
+      "platform_fee": 0,
+      "cod_fee": 99,
+      "zones": {
+        "metro": {
+          "delivery_fee": 119,
+          "free_delivery_threshold": null,
+          "estimated_days": "2-3 Days"
+        },
+        "tier2": {
+          "delivery_fee": 119,
+          "free_delivery_threshold": null,
+          "estimated_days": "3-5 Days"
+        },
+        "tier3": {
+          "delivery_fee": 149,
+          "free_delivery_threshold": null,
+          "estimated_days": "5-7 Days"
+        },
+        "remote": {
+          "delivery_fee": 199,
+          "free_delivery_threshold": null,
+          "estimated_days": "7-10 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "No free shipping threshold; order value < ₹1300 pays ₹119; ₹1300–₹3998 pays ₹99; ₹3999+ pays ₹69 shipping (prepaid only). General items charge flat ₹199."
+    },
+    "chemist180": {
+      "display_name": "Chemist180",
+      "serviceable": true,
+      "fee_type": "high_threshold_flat",
+      "platform_fee": 0,
+      "cod_fee": 50,
+      "zones": {
+        "metro": {
+          "delivery_fee": 100,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "2-4 Days"
+        },
+        "tier2": {
+          "delivery_fee": 100,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "3-5 Days"
+        },
+        "tier3": {
+          "delivery_fee": 120,
+          "free_delivery_threshold": 1200,
+          "estimated_days": "5-7 Days"
+        },
+        "remote": {
+          "delivery_fee": 180,
+          "free_delivery_threshold": 2000,
+          "estimated_days": "7-10 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Applies additional GST calculation at checkout; minimum ₹1000 order needed for free delivery."
+    },
+    "emedicalwala": {
+      "display_name": "eMedicalwala",
+      "serviceable": true,
+      "fee_type": "weight_and_value_based",
+      "platform_fee": 10,
+      "cod_fee": 40,
+      "zones": {
+        "metro": {
+          "delivery_fee": 50,
+          "free_delivery_threshold": 750,
+          "estimated_days": "2-3 Days"
+        },
+        "tier2": {
+          "delivery_fee": 65,
+          "free_delivery_threshold": 850,
+          "estimated_days": "3-5 Days"
+        },
+        "tier3": {
+          "delivery_fee": 85,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "5-7 Days"
+        },
+        "remote": {
+          "delivery_fee": 150,
+          "free_delivery_threshold": 1800,
+          "estimated_days": "7-12 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Shipping is computed based on consignment weight and order amount; liquid formulations carry regional courier restrictions."
+    },
+    "medivik": {
+      "display_name": "Medivik",
+      "serviceable": true,
+      "fee_type": "flat_order_value",
+      "platform_fee": 0,
+      "cod_fee": 30,
+      "zones": {
+        "metro": {
+          "delivery_fee": 45,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "1-3 Days"
+        },
+        "tier2": {
+          "display_fee": 45,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "3-5 Days"
+        },
+        "tier3": {
+          "delivery_fee": 65,
+          "free_delivery_threshold": 1200,
+          "estimated_days": "5-7 Days"
+        },
+        "remote": {
+          "delivery_fee": 120,
+          "free_delivery_threshold": 2000,
+          "estimated_days": "7-10 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Standard ₹45 fee applies below ₹1000 order value."
+    },
+    "medizinhub": {
+      "display_name": "Medizinhub",
+      "serviceable": true,
+      "fee_type": "flat_order_value",
+      "platform_fee": 0,
+      "cod_fee": 40,
+      "zones": {
+        "metro": {
+          "delivery_fee": 50,
+          "free_delivery_threshold": 500,
+          "estimated_days": "2-4 Days"
+        },
+        "tier2": {
+          "delivery_fee": 60,
+          "free_delivery_threshold": 750,
+          "estimated_days": "3-6 Days"
+        },
+        "tier3": {
+          "delivery_fee": 80,
+          "free_delivery_threshold": 1000,
+          "estimated_days": "5-8 Days"
+        },
+        "remote": {
+          "delivery_fee": 140,
+          "free_delivery_threshold": 1500,
+          "estimated_days": "8-12 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "Regional distributor platform with location-based courier dispatch."
+    },
+    "kogland_commerce": {
+      "display_name": "Kogland Commerce",
+      "serviceable": true,
+      "fee_type": "volumetric_weight_b2b",
+      "platform_fee": 0,
+      "cod_fee": 100,
+      "zones": {
+        "metro": {
+          "delivery_fee": 80,
+          "free_delivery_threshold": 2500,
+          "estimated_days": "2-4 Days"
+        },
+        "tier2": {
+          "delivery_fee": 100,
+          "free_delivery_threshold": 3000,
+          "estimated_days": "4-6 Days"
+        },
+        "tier3": {
+          "delivery_fee": 150,
+          "free_delivery_threshold": 5000,
+          "estimated_days": "6-8 Days"
+        },
+        "remote": {
+          "delivery_fee": 250,
+          "free_delivery_threshold": null,
+          "estimated_days": "8-14 Days"
+        },
+        "unserviceable": {
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
+          "estimated_days": "Non-serviceable"
+        }
+      },
+      "notes": "B2B medical supply platform. Shipping is based on actual/volumetric carton weight; higher free-shipping thresholds apply."
+    }
+  }
+}
