@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "serpapi-cache"
@@ -22,4 +22,4 @@ dependencies = [
 dev = ["pytest>=8.0", "pytest-mock>=3.12"]
 
 [tool.setuptools.packages.find]
-include = ["serpapi_cache*"]
+include = ["serpapi_cache*", "pharmawatch*"]
