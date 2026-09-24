@@ -109,10 +109,14 @@ def search_platform_price(
 # P2.3 — Extract exact 'Visit Site' Merchant URL via Page Token
 # ─────────────────────────────────────────────
 
-def get_direct_merchant_link(page_token: str, verbose: bool = False) -> Optional[str]:
+def get_direct_merchant_link(
+    page_token: str,
+    target_platform: Optional[str] = None,
+    verbose: bool = False,
+) -> Optional[str]:
     """
     Query SerpApi google_immersive_product with page_token to extract the exact
-    blue 'Visit site' merchant landing page URL (e.g. 1mg.com/drugs/..., apollopharmacy.in/medicine/...).
+    blue 'Visit site' merchant landing page URL for the target_platform (e.g. 1mg, Apollo Pharmacy).
     Result is cached in SerpApiCache for 24 hours.
     """
     if not page_token:
@@ -125,7 +129,19 @@ def get_direct_merchant_link(page_token: str, verbose: bool = False) -> Optional
     }
     res = cache.search(params, ttl=_PRICE_TTL)
     stores = res.get("product_results", {}).get("stores", [])
-    if stores and isinstance(stores[0], dict) and stores[0].get("link"):
+    if not stores:
+        return None
+
+    if target_platform:
+        target_clean = target_platform.lower().replace(" ", "")
+        for store in stores:
+            if isinstance(store, dict) and store.get("link"):
+                store_name = (store.get("name") or "").lower().replace(" ", "")
+                if target_clean in store_name or store_name in target_clean:
+                    return store["link"]
+
+    if isinstance(stores[0], dict) and stores[0].get("link"):
         return stores[0]["link"]
     return None
+
 

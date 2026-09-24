@@ -217,14 +217,16 @@ def enrich_direct_merchant_links(distilled_items: List[Dict], max_items: int = 5
 
     for item in distilled_items[:max_items]:
         token = item.get("page_token")
+        platform = item.get("platform")
         if token:
-            resolved = get_direct_merchant_link(token, verbose=False)
+            resolved = get_direct_merchant_link(token, target_platform=platform, verbose=False)
             if resolved:
                 sanitized = sanitize_link(resolved)
                 item["direct_link"] = sanitized
                 item["link"] = sanitized
 
     return distilled_items
+
 
 
 
