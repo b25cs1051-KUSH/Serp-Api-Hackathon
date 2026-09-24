@@ -1,305 +1,320 @@
-# serpapi-cache
+# PharmaWatch
 
-> A semantic query cache for [SerpApi](https://serpapi.com) — stops you from burning API credits on queries you've already asked before.
+Type a medicine and your PIN code. PharmaWatch shows what it actually costs **delivered to your door**
+from 13 Indian online pharmacies, and whether a **generic with the same composition** is cheaper.
 
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
-[![SerpApi](https://img.shields.io/badge/powered%20by-SerpApi-green)](https://serpapi.com)
+```
+Search: "Stamlo 5" (amlodipine 5 mg, blood pressure) · PIN 110001
+
+  Stamlo 5 @ Chemist180     ₹66.02 delivered   ~₹2.20 / tablet (pack size estimated)
+  Amlokind 5 @ Chemist180   ₹19.41 delivered   ~₹1.29 / tablet (pack size estimated)
+  → same medicine, same strength: save ~41% per tablet
+```
+
+It is built on [SerpApi](https://serpapi.com) (Google Shopping + Google product pages), a Redis cache
+that decides when *not* to call SerpApi, and Gemini, used for one narrow job: picking substitutes
+from a curated catalogue.
 
 ---
 
-## What Problem Does This Solve?
+## Contents
 
-When you build an AI agent that calls SerpApi, it often searches for the same or very similar things multiple times:
-
-```
-Agent calls:  "best laptop under 50000 India"    → costs 1 credit, takes 7s
-Agent calls:  "top laptops below 50k in India"   → costs 1 MORE credit, takes 7s again
-```
-
-These two queries mean the **same thing**. Without a cache, you pay twice and wait twice.
-With `serpapi-cache`, the second call is **free and instant**.
-
----
-
-## How It Works — Simple Explanation
-
-Think of it like this: every search query gets converted into a "fingerprint" (a list of 384 numbers that captures the *meaning* of the query). When you search again, we compare the new fingerprint against all stored fingerprints. If they're close enough (above a similarity threshold), we return the saved result instead of calling SerpApi.
-
-```
-You search: "affordable diabetes drugs India"
-             ↓
-     Convert to fingerprint: [0.23, -0.11, 0.87, ...]
-             ↓
-     Compare against cached fingerprints
-             ↓
-     "cheapest medicine for diabetes India" → similarity score: 0.93
-     0.93 > 0.80 threshold → CACHE HIT → return saved result (FREE!)
-```
-
-**The math:** We use **cosine similarity** — a measure of how "aligned" two vectors are.
-Score of 1.0 = identical meaning. Score of 0.0 = completely unrelated.
-We set the bar at **0.80** (data-driven from testing — not a guess).
+- [How a search works](#how-a-search-works)
+- [Keeping the LLM grounded](#keeping-the-llm-grounded)
+- [The cache](#the-cache)
+- [Problems we hit, and what fixed them](#problems-we-hit-and-what-fixed-them)
+- [What one search costs](#what-one-search-costs)
+- [Setup](#setup)
+- [Tests](#tests)
+- [Project layout](#project-layout)
+- [Known limits](#known-limits)
 
 ---
 
-## What Was Built
+## How a search works
 
-### Core Library: `serpapi_cache/`
+Everything after the first step runs in parallel. Results reach the browser as each piece finishes.
 
-| File | What it does |
+```
+ t=0  ┬─ Google Shopping: "Stamlo 5 price" ──▶ main list (only real Stamlo 5 listings)
+      │                                         └─▶ product page links for the top 5 (parallel)
+      │
+      └─ Gemini + compositions.md: 3 substitutes ─┬─ search "Amlokind 5"  ─┐
+                                                  ├─ search "Amtas 5"     ─┼─▶ pool every search
+                                                  └─ search "Amlopres 5"  ─┘   ▶ compare per tablet,
+                                                                                  delivery included
+                                                                                ▶ links for the cheaper ones
+```
+
+1. **Main search.** Google Shopping via SerpApi. Listings are parsed, mapped to one of 13 known
+   pharmacies, and **delivery cost for your PIN** is added: zone lookup (metro / tier 2 / tier 3 /
+   remote / unserviceable), free-delivery thresholds, fee slabs and platform fees. The list is ranked
+   by the delivered price, not the shelf price.
+2. **Substitutes.** Gemini reads `pharmawatch/drug_db/compositions.md` (79 compositions, 307 brands)
+   and returns up to 3 brands with the same active ingredient, strength and release type.
+3. **Substitute searches.** All 3 run at the same moment, as soon as Gemini answers.
+4. **Pooling.** Listings from all 4 searches are merged. A brand is matched against every search, not
+   just its own (see [problem 3](#3-a-brands-own-search-often-doesnt-return-that-brand)).
+5. **Comparison.** Per-tablet price, delivery included. Missing pack sizes are estimated and flagged.
+6. **Direct links.** Resolving a listing to the pharmacy's own product page costs a SerpApi call, so it
+   is done only for the top 5 main listings and for alternatives that are actually cheaper.
+
+The browser receives four events: `main`, `main_update` (only if pooling found more listings),
+`alternatives` and `main_links`, in whatever order they finish.
+
+---
+
+## Keeping the LLM grounded
+
+Gemini **never sees web data**. Prices and listings from SerpApi are filtered by deterministic code;
+the model only chooses from a catalogue we control, and its answer is checked before it is used.
+
+| Step | What happens |
 |---|---|
-| `cache.py` | The main `SerpApiCache` class — the brain of the whole system |
-| `backends.py` | Two storage backends: `InMemoryBackend` (dev) and `RedisBackend` (production) |
-| `__init__.py` | Makes it importable as a Python package |
-
-### Scripts: `scripts/`
-
-| File | What it does |
-|---|---|
-| `verify_cache.py` | 3-stage test suite that proves everything works end-to-end |
-| `tune_threshold.py` | Prints similarity scores for query pairs to pick the right threshold |
+| Input | The searched name + the 79-entry catalogue (ingredient, strength, release type, brands) |
+| Output | JSON with a fixed schema: `searched_brand`, up to 3 `alternatives`, a one-line `reason` |
+| Validation (code) | Every alternative must be a brand **listed in the same catalogue entry** as the searched medicine. Anything else is dropped: brands from other entries, invented brands, the searched brand itself |
+| Safety check (code) | A search carrying a suffix the entry doesn't list is rejected: "Telma 40 **H**" (telmisartan + hydrochlorothiazide) is not "Telma 40" |
+| Cost | One call per distinct search, cached for 30 days; the cache key includes a hash of the catalogue and the prompt, so editing either invalidates old answers |
+| Failure | Model chain (`gemini-2.5-flash` → `gemini-3.5-flash-lite` → …) on quota / overload / timeout; if all fail, a plain catalogue lookup takes over |
 
 ---
 
-## The Two Backends — When to Use Which
+## The cache
 
-### InMemoryBackend (development & testing)
-- Zero setup — no database, no Docker, nothing extra to install
-- Data lives only while your Python process runs (lost on restart)
-- Perfect for: testing your app, demos, quick prototypes
+`serpapi_cache/` is a drop-in replacement for `serpapi.Client.search()`:
 
 ```python
-from serpapi_cache import SerpApiCache, InMemoryBackend
-
-cache = SerpApiCache(api_key="...", backend=InMemoryBackend())
-```
-
-### RedisBackend (production)
-- Data persists across restarts — survives crashes and reboots
-- Supports TTL (auto-expiry of stale results)
-- Can be shared across multiple processes or servers
-- Perfect for: deployed agents, production apps, multi-worker systems
-
-```python
-from serpapi_cache import SerpApiCache, RedisBackend
-
-cache = SerpApiCache(
-    api_key="...",
-    backend=RedisBackend(host="localhost", port=6379),
-    default_ttl=3600,   # entries expire after 1 hour
-)
-```
-
----
-
-## How SerpApi Fits In
-
-`SerpApiCache` is a **drop-in replacement** for `serpapi.Client.search()`.
-You change one line in your code and get caching for free:
-
-```python
-# BEFORE — direct SerpApi call every time (costs credits every call)
-import serpapi
-client = serpapi.Client(api_key="...")
-result = client.search({"engine": "google", "q": "your query"})
-
-# AFTER — cached SerpApi (free on repeat/similar queries)
 from serpapi_cache import SerpApiCache
-cache = SerpApiCache(api_key="...")
-result = cache.search({"engine": "google", "q": "your query"})
-#                ↑ same interface, same result dict — just cached
+cache = SerpApiCache()                                    # Redis on localhost:6379
+result = cache.search({"engine": "google_shopping", "q": "Dolo 650 price"})
 ```
 
-Internally, on every `cache.search()` call:
-1. The query is embedded into a 384-dimension vector (meaning fingerprint)
-2. Compare against all stored vectors using cosine similarity
-3. Score ≥ 0.80 → return cached result (**FREE**, zero SerpApi credit used)
-4. Score < 0.80 → call SerpApi normally → store the result + embedding for next time
+Each lookup goes through up to three steps:
+
+1. **Exact match.** The normalised query (case, spacing, `500 mg` → `500mg`) is hashed and looked up.
+   One Redis `GET`, no model involved.
+2. **Semantic match.** The query is embedded (`all-MiniLM-L6-v2`, 384 dimensions) and compared by
+   cosine similarity with everything cached. A score ≥ 0.88 is a hit.
+3. **Dosage guard.** A semantic hit is refused if the numbers differ: "Metformin 500mg" never gets
+   "Metformin 1000mg" results.
+
+On top of that:
+
+- **`exact_only=True`** skips step 2. Catalogue brand names are always searched this way (see
+  [problem 1](#1-a-semantic-cache-cant-tell-two-brands-apart)).
+- **Background writes.** A search that calls SerpApi returns immediately; the Redis write happens on a
+  writer thread. The next search waits for any write still in flight (a few ms), so a repeat query
+  always hits.
+- **Call log.** Every lookup records engine, query, outcome (exact / semantic / API call), time taken,
+  whether it cost a credit, and *why* it happened ("substitute search: Amlokind 5"). The UI shows it live.
+- **Redis down?** The cache runs in passthrough mode: every search goes to SerpApi, nothing crashes.
+
+Measured: SerpApi calls took **1.7–12 s**; cache hits took **1–20 ms**.
 
 ---
 
-## Verified Test Results
+## Problems we hit, and what fixed them
 
-All results from real test runs on this machine.
+Each of these came from a real run.
 
-### Speed
-| Operation | Time |
-|---|---|
-| Real SerpApi call (cache miss) | **7.08 seconds** |
-| Cache hit (same query) | **0.0099 seconds** |
-| **Speedup** | **710x faster** |
+### 1. A semantic cache can't tell two brands apart
 
-### Semantic Accuracy (threshold=0.80, data-driven)
-| Query A | Query B | Score | Correct? |
-|---|---|---|---|
-| "best laptop under 50000 India" | "top laptops below 50k in India" | 0.849 | ✅ HIT |
-| "cheapest medicine for diabetes" | "affordable diabetes drugs India" | 0.928 | ✅ HIT |
-| "government tenders IT sector" | "India govt IT procurement" | 0.852 | ✅ HIT |
-| "best laptop under 50000 India" | "India GDP growth 2026 forecast" | 0.393 | ✅ MISS |
-| "medicine price comparison" | "SerpApi Python tutorial" | 0.045 | ✅ MISS |
+"Calpol 650 price" and "Dolo 650 price" are close in meaning and share the same number, so the
+dosage guard lets them through. Served from cache, the user would see Dolo's prices under Calpol.
 
-**Safe gap:** HITs score `0.81–0.93`, MISSes score `0.04–0.39`.
-Threshold of `0.80` sits cleanly in between — zero false positives.
+**Fix:** brand names from the catalogue are looked up by exact name only (`exact_only=True`). Their
+results are still stored with an embedding, so free-text searches can reuse them.
 
-### 3-Stage Verification (all passed ✅)
-- **Stage 1** — In-memory: 6 tests — miss, hit, semantic-hit, wrong-query-miss, TTL expiry, flush
-- **Stage 2** — Redis: Write → Read → Cross-instance persistence (new Python process, same Redis → still hits)
-- **Stage 3** — Real SerpApi: Live API call → cached → 710x speedup confirmed
+### 2. Google Shopping returns look-alike medicines
 
----
+A search for **Stamlo 5** returned 22 listings from known pharmacies. Only **8** were Stamlo 5. The
+rest included **Esta 5** and **Stalopam 5** (escitalopram, an antidepressant), Stamlo **Bis**,
+Stamlo **D**, Stamlo **Beta** and Met Stamlo (all combination drugs). Two of the 5 product-page
+lookups, each costing a credit, went to the antidepressant.
 
-## Project Structure
+**Fix:** a listing counts only if its title is the brand and strength. It is rejected when it carries:
 
-```
-serpapi-cache/
-│
-├── serpapi_cache/              ← the library (pip-installable)
-│   ├── __init__.py             ← exposes SerpApiCache, RedisBackend, InMemoryBackend
-│   ├── cache.py                ← core logic: embed → compare → hit/miss → store
-│   └── backends.py             ← InMemoryBackend + RedisBackend implementations
-│
-├── scripts/
-│   ├── verify_cache.py         ← 3-stage test suite
-│   └── tune_threshold.py       ← similarity score printer for threshold tuning
-│
-├── docs/
-│   └── judge_notes.md          ← judge background research
-│
-├── .env                        ← SERP_API_KEY (never committed — in .gitignore)
-├── .gitignore                  ← ignores .env, __pycache__, build artifacts
-├── pyproject.toml              ← makes this a proper Python package
-├── requirements.txt            ← all dependencies listed
-└── README.md                   ← this file
-```
+- a variant suffix the brand doesn't have (SR, AT, Bis, H, Plus…);
+- a second dose: "Telma AZ 40mg **8mg**", "Amlokind AT 5/**50**mg" (doses that add up to the
+  brand's own, like Augmentin 625 = 500 mg + 125 mg, are fine);
+- a short word between the brand and its dose: "Telma **NB** 40MG", "Telmikind **AMH** 40MG".
 
----
+Checked against every cached search: the last two rules rejected exactly the 5 combination products
+and **no correct listing**. The first attempt had 5 false alarms ("(Pack-30)", the site name
+"| 1mg" read as a 1 mg dose, "View Uses"), which were fixed before the rules went in.
 
-## Installation & Quick Start
+### 3. A brand's own search often doesn't return that brand
 
-```bash
-# 1. Clone and install
-git clone <your-repo>
-cd serpapi-cache
-pip install -r requirements.txt
+In **4 of 7** brand searches, Google Shopping returned **zero** listings of the searched brand from
+the pharmacies we cover. Dolo 650, Amlopres 5, Amtas 5 and Glyciphage SR 500 came back as other
+strengths or other brands.
+Yet Amlopres 5 listings *did* appear in the Stamlo 5 and Amtas 5 searches.
 
-# 2. Set your API key
-echo "SERP_API_KEY=your_key_here" > .env
+**Fix:** every brand is matched against the pooled listings of all searches in the run. That found
+Amlopres 5 at Kogland (₹3.87 / tablet) at no extra cost.
 
-# 3. Verify everything works
-python scripts/verify_cache.py --offline   # zero API credits used
-python scripts/verify_cache.py --no-redis  # tests real SerpApi (~2 credits)
-python scripts/verify_cache.py             # full test with Redis
+### 4. Titles often don't say how many tablets
 
-# 4. Tune threshold for your specific query types
-python scripts/tune_threshold.py
-```
+"Stamlo 5MG Tablet ₹66.02". Is that 15 tablets or 30? Without a pack size there is no per-tablet
+price, and the cheapest offer in that run (Chemist180, free delivery) was being skipped.
 
----
+**Fix:** estimate the pack size from the same brand's other listings, choosing the size that gives a
+consistent per-tablet price. For Telma 40, 1mg's ₹99.80 is a **15**-strip (₹6.65 / tablet, close to
+the brand's ₹6.43 median), not a 30, even though 30 is the more common size. Dawaa Dost's product
+URL for its ₹91 Telma 40 (`…telma-40mg-tablet-15s`) confirms that this price range is a 15-strip.
+Every estimate is flagged (`pack_estimated`,
+`estimated`) and shown with a "~" in the UI. Implausible estimates (outside 0.5–2× the median) are
+not used.
 
-## Key Design Decisions & Why
+### 5. Shelf price is not what you pay
 
-### Why `all-MiniLM-L6-v2`?
-- Tiny (90MB), fast, runs on CPU — no GPU needed
-- 384-dimension embeddings — good balance of accuracy vs. speed
-- Downloads once from HuggingFace, cached locally forever after
+Apollo's Stamlo-5 15's costs ₹40 on the shelf and **₹120** delivered to 110001. Chemist180 charges
+₹66.02 with free delivery. Ranking by delivered price reverses the order.
 
-### Why cosine similarity, not exact string match?
-- Exact match: `"best laptop"` ≠ `"top laptop"` → always a cache miss (wasteful)
-- Cosine similarity: `"best laptop"` and `"top laptop"` → score 0.85 → cache hit (correct)
+### 6. Step by step was slow
 
-### Why threshold 0.80?
-- Not arbitrary — derived by running `tune_threshold.py` on 7 real query pairs
-- HITs score `0.81–0.93`, MISSes score `0.04–0.39` — the gap is massive
-- 0.80 sits perfectly in the empty space between them
+The 9 SerpApi calls of the Telma 40 run add up to **33.8 s** if made one after another. In parallel,
+main results arrived at **2.6 s**, generic alternatives at **5.2 s**, and all product links at
+**8.1 s**. Alternatives don't wait for the main product links, which are the slowest step.
 
-### Why two backends?
-- Same interface — swap `InMemoryBackend()` → `RedisBackend()` and nothing else changes
-- InMemory for dev/demos, Redis for production — users pick based on their needs
+### 7. The embedding model took 40–100 s to load
+
+Timing each import showed two causes:
+
+- **~20 s: a Windows library clash.** torch and scikit-learn each ship their own OpenMP runtime.
+  Loading scikit-learn's *after* torch's (the order `sentence-transformers` uses) took ~20 s, while
+  the reverse order takes ~1.5 s. The cache now imports scikit-learn first.
+- **~7 s: update checks.** The model was re-checked against HuggingFace on every start. It now loads
+  from the local copy and goes online only if it isn't downloaded.
+
+Start-up went from 41–98 s to **~10 s**. The API warms up on a background thread at start.
+
+### 8. A cache write could be lost at shutdown
+
+With writes on a background thread, a process exiting right after a search lost its write: the
+writer loaded the embedding model while Python was shutting down, and that import failed. The model
+is now loaded on the calling thread before the write is handed off. Verified across two processes:
+the second one gets a cache hit with 0 API calls.
 
 ---
 
-## Potential Breaking Points — Know Before Judges Ask
+## What one search costs
 
-### 1. Embedding model version drift
-**What:** If `sentence-transformers` library updates `all-MiniLM-L6-v2`, embedding values may shift.
-**Impact:** Old cached embeddings won't match new embeddings → cache miss storm.
-**Fix:** Pin version in `requirements.txt` (already done). Flush Redis after any upgrade.
-
-### 2. Redis crashes / not running
-**What:** If Redis stops, `RedisBackend` throws `ConnectionError` immediately.
-**Impact:** Entire agent crashes.
-**Fix:** Use try/except to fall back to `InMemoryBackend`:
-```python
-try:
-    backend = RedisBackend(host="localhost")
-except Exception:
-    backend = InMemoryBackend()  # graceful degradation
-```
-
-### 3. SerpApi JSON schema changes
-**What:** SerpApi occasionally changes response field names (e.g., `organic_results` → something else).
-**Impact:** Code reading specific fields breaks. Cache itself is unaffected (stores raw JSON).
-**Fix:** Always use `.get("field", default)` when reading SerpApi results downstream.
-
-### 4. Memory growth without TTL
-**What:** `InMemoryBackend` with `default_ttl=0` (never expire) accumulates entries forever.
-**Impact:** Memory leak in long-running agents.
-**Fix:** Always set a `default_ttl`. Default in this library is 3600s (1 hour).
-
-### 5. Windows Redis not persistent across reboots
-**What:** On Windows, `redis-server.exe` started manually dies on reboot.
-**Impact:** Cache empty after restart.
-**Fix:** Register as Windows Service: `redis-server --service-install`, or use Docker.
-
-### 6. First-run model download delay
-**What:** First time `SerpApiCache` initializes, it downloads ~90MB model from HuggingFace.
-**Impact:** 30-60 second delay on first ever run in a fresh environment.
-**Fix:** Pre-download in setup/Dockerfile:
-```bash
-python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-```
-
----
-
-## Business Value — Why This Matters
-
-A team running an AI agent that makes 1000 SerpApi searches/day:
-
-| Metric | Without Cache | With Cache (40% hit rate) |
+| Call | SerpApi credits | When |
 |---|---|---|
-| Daily API calls | 1000 | 600 |
-| Daily credits used | 1000 | 600 |
-| Credits saved/day | — | **400** |
-| Credits saved/year | — | **146,000** (~US$1,460) |
-| Response time | 7s average | 0.01s on hits |
+| Main search | 1 | Always, unless cached (24 h) |
+| Substitute searches | up to 3 | Unless cached |
+| Product-page links, main list | up to 5 | Only the top 5 real matches |
+| Product-page links, alternatives | 0–3 | Only alternatives that are cheaper |
+| Gemini | 0 SerpApi credits | Once per distinct search, then cached |
+
+A new medicine costs at most 12 credits (9 in each of our live runs). Repeating it within 24 hours
+costs **0**, and a later search
+for one of its substitutes reuses that substitute's cached listings.
 
 ---
 
-## How This Fits the Hackathon
+## Setup
 
-**Track:** Open-Source Integrations
+Requirements: Python 3.10+, Docker (for Redis), Node 20+ (for the web UI).
 
-**SerpApi role:** `serpapi-cache` wraps `serpapi.Client.search()` directly. Every cache miss triggers a real SerpApi call. The library exists *because of* SerpApi — SerpApi is the core engine, not a bolt-on.
+```bash
+# 1. Redis (data persists in a Docker volume)
+docker compose up -d
 
-**Judge alignment:**
-- **Josef:** Clean repo, `pyproject.toml`, `.gitignore`, typed interfaces, comprehensive README — production open-source quality
-- **Pranav:** Directly saves users' SerpApi credits — clear, quantifiable business value
-- **Tomas:** Foundation for the distiller pipeline — clean LLM context starts with clean, non-redundant data
-- **Adarsh:** `pip install`, 3 lines to use, works out of the box — ships fast, practical
+# 2. Python dependencies
+pip install -r requirements.txt -r api/requirements.txt
+
+# 3. Keys: .env in the repo root (git-ignored)
+SERP_API_KEY=...
+GEMINI_API_KEY=...
+# optional: GEMINI_MODEL=gemini-2.5-flash,gemini-2.5-flash-lite
+
+# 4. API
+uvicorn api.main:app --port 8000
+
+# 5. Web UI (http://localhost:3000)
+cd web && npm install && npm run dev
+```
+
+### API endpoints
+
+| Endpoint | What it returns |
+|---|---|
+| `GET /api/search/stream?q=Stamlo 5&pincode=110001` | Server-Sent Events: `main`, `main_update`, `alternatives`, `main_links`, plus every SerpApi call live and a summary |
+| `GET /api/health` | Redis status, model warm-up state, whether keys are configured (never the keys) |
+| `GET /api/account` | SerpApi plan usage (free call, cached 30 s) |
+| `GET /api/stats` | Cache hit rate, credits spent and saved in this process |
+| `GET /api/cache/lab?q=...` | What the cache *would* do with a query: nearest cached queries, similarity, dosage guard. Read-only, 0 credits |
+| `GET /api/cache/entries` | Everything in Redis, with time left |
+
+### Keys and secrets
+
+- Keys live only in `.env`, which is git-ignored.
+- The Gemini key is sent in a request header, not the URL.
+- API responses report *whether* a key is configured, never its value.
+- Errors from the SerpApi account lookup are reported without the request URL, which contains the key.
 
 ---
 
-## What's Next (Roadmap)
+## Tests
 
-- [ ] `serpapi_distiller/` — strip noisy SerpApi JSON into clean Markdown for LLMs
-- [ ] Unified `SerpApiPipeline` — cache + distill in one call
-- [ ] Demo agent (PharmaWatch / TenderHawk) using the full stack
-- [ ] `docker-compose.yml` — one command to run Redis + demo agent
-- [ ] Async support (`async def search()`)
-- [ ] Auto-fallback: Redis → InMemory on connection failure
+```bash
+python scripts/test_p5_generics.py                           # 101 offline checks, 0 credits
+python scripts/test_p4_delivery_cost.py                      # delivery rules, 0 credits
+python scripts/test_p5_generics.py --llm "dollo 650" "Telma 40 H"          # Gemini only, 0 SerpApi credits
+python scripts/test_p5_generics.py "Stamlo 5" 110001 --cache-only          # replay from Redis, 0 credits
+python scripts/test_p5_generics.py "Stamlo 5" 110001                       # live run, full call log
+```
+
+The offline checks use real titles and prices from live runs, and cover the matching rules, pack
+estimation, catalogue validation, exact-only caching, background writes, the parallel timing, and a
+full pipeline replay with stubbed searches (including a misspelled search, a medicine outside the
+catalogue, and a failing substitute search).
+
+`--cache-only` serves everything from Redis and blocks any call that would cost a credit, listing
+what a live run would still pay for.
+
+---
+
+## Project layout
+
+```
+serpapi_cache/          cache library: exact → semantic → dosage guard, Redis backend,
+                        background writes, call log
+pharmawatch/
+  search.py             SerpApi queries (Google Shopping, product pages)
+  distiller.py          SerpApi JSON → clean listings, pharmacy detection
+  delivery_cost.py      PIN zone + per-pharmacy delivery rules → delivered price
+  comparator.py         ranking by delivered price
+  generics.py           catalogue matching, brand/strength filtering, pooling, pack estimation
+  gemini.py             Gemini REST client (JSON schema, model fallback chain)
+  pipeline.py           the parallel search, streamed as events
+  drug_db/compositions.md   79 compositions, 307 brands
+notes/postal_codes_delivery_rules.json   PIN zones and delivery fees per pharmacy
+api/                    FastAPI layer (SSE search, health, cache lab)
+web/                    Next.js UI
+scripts/                offline tests, live replay, threshold tuning
+docker-compose.yml      Redis with append-only persistence
+```
+
+---
+
+## Known limits
+
+- **Google Shopping coverage.** Some brands are not listed at all (Amtas 5, Telvas 40); pooling helps
+  but cannot invent listings.
+- **Estimated pack sizes are estimates.** They are always flagged; a pharmacy selling an unusual pack
+  can still be misread.
+- **Catalogue size.** Substitutes come only from `compositions.md` (79 compositions). A medicine outside
+  it still gets prices, but no alternatives.
+- **Strict matching.** "Augmentin 625 Duo" is rejected because "Duo" is treated as a different product;
+  adding the variant to the catalogue fixes it.
+- **Delivery fees** come from each pharmacy's published rules and can change.
 
 ---
 
 ## License
 
-MIT — free to use, modify, and distribute.
+MIT
