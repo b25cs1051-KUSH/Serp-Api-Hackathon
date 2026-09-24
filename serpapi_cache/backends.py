@@ -11,9 +11,23 @@ Start Redis before using:
 """
 
 import json
+import sys
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Optional
+
+
+def say(message: str = "") -> None:
+    """
+    print() that never raises: on a console or redirected log whose encoding can't show emoji
+    (Windows cp1252), characters are replaced. A raising print inside RedisBackend.__init__ would
+    otherwise be read as "Redis unreachable" and silently switch the cache to passthrough.
+    """
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(message.encode(encoding, errors="replace").decode(encoding, errors="replace"))
 
 
 # ─────────────────────────────────────────────
@@ -79,7 +93,7 @@ class RedisBackend(BaseBackend):
         )
         # Test connection immediately — fail fast
         self._r.ping()
-        print(f"✅ Redis connected at {host}:{port} (db={db})")
+        say(f"✅ Redis connected at {host}:{port} (db={db})")
 
     def _val_key(self, key: str) -> str:
         return f"{self.PREFIX}{key}:value"

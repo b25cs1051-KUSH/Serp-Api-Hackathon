@@ -30,7 +30,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from typing import Any, Optional
 
-from .backends import BaseBackend, RedisBackend
+from .backends import BaseBackend, RedisBackend, say
 
 
 # ─────────────────────────────────────────────
@@ -231,7 +231,7 @@ class SerpApiCache:
         if self.backend is None:
             if self.verbose:
                 query_text = self._params_to_query_string(params)
-                print(f"⚡ PASSTHROUGH | Redis down — calling SerpApi directly for '{query_text[:60]}'")
+                say(f"⚡ PASSTHROUGH | Redis down — calling SerpApi directly for '{query_text[:60]}'")
             self.stats["misses"] += 1
             return "api_call (passthrough)", self._call_serpapi(params)
 
@@ -251,7 +251,7 @@ class SerpApiCache:
             self.stats["exact_hits"] += 1
             self.stats["api_calls_saved"] += 1
             if self.verbose:
-                print(f"🟢 CACHE HIT (EXACT) | query='{query_text[:60]}'")
+                say(f"🟢 CACHE HIT (EXACT) | query='{query_text[:60]}'")
             return "exact_hit", exact_hit
 
         # Token-only requests (e.g. google_immersive_product with page_token → the
@@ -273,13 +273,13 @@ class SerpApiCache:
                 self.stats["hits"] += 1
                 self.stats["api_calls_saved"] += 1
                 if self.verbose:
-                    print(f"🟢 CACHE HIT  | similarity={similarity:.3f} | query='{query_text[:60]}'")
+                    say(f"🟢 CACHE HIT  | similarity={similarity:.3f} | query='{query_text[:60]}'")
                 return f"semantic_hit ({similarity:.3f})", cached_result
 
         # 2. Cache miss — call SerpApi
         self.stats["misses"] += 1
         if self.verbose:
-            print(f"🔴 CACHE MISS | query='{query_text[:60]}' → calling SerpApi...")
+            say(f"🔴 CACHE MISS | query='{query_text[:60]}' → calling SerpApi...")
 
         result = self._call_serpapi(params)
 
@@ -313,7 +313,7 @@ class SerpApiCache:
         self.wait_for_writes()
         self.backend.flush()
         if self.verbose:
-            print("🗑️  Cache flushed.")
+            say("🗑️  Cache flushed.")
 
     def size(self) -> int:
         """Number of entries currently in cache. Returns 0 if Redis is unavailable."""
@@ -335,16 +335,16 @@ class SerpApiCache:
 
     def print_stats(self) -> None:
         s = self.get_stats()
-        print("\n" + "─" * 45)
-        print(f"  📊 SerpApi Cache Statistics")
-        print("─" * 45)
-        print(f"  Total searches   : {s['total_searches']}")
-        print(f"  Cache hits       : {s['hits']}  ✅  (exact: {s['exact_hits']})")
-        print(f"  Cache misses     : {s['misses']}  ❌")
-        print(f"  Hit rate         : {s['hit_rate_pct']}%")
-        print(f"  API calls saved  : {s['api_calls_saved']}")
-        print(f"  Entries in cache : {s['cache_size']}")
-        print("─" * 45 + "\n")
+        say("\n" + "─" * 45)
+        say(f"  📊 SerpApi Cache Statistics")
+        say("─" * 45)
+        say(f"  Total searches   : {s['total_searches']}")
+        say(f"  Cache hits       : {s['hits']}  ✅  (exact: {s['exact_hits']})")
+        say(f"  Cache misses     : {s['misses']}  ❌")
+        say(f"  Hit rate         : {s['hit_rate_pct']}%")
+        say(f"  API calls saved  : {s['api_calls_saved']}")
+        say(f"  Entries in cache : {s['cache_size']}")
+        say("─" * 45 + "\n")
 
     # ─────────────────────────────────────────────
     # Private helpers
@@ -362,7 +362,7 @@ class SerpApiCache:
                 vector = embedding if embedding is not None else (self._embed(query_text) if is_text_query else [])
                 self.backend.set(key, result, vector, ttl, query_text)
             except Exception as e:  # a failed store only costs a future cache hit
-                print(f"⚠️  Cache store failed for '{query_text[:60]}': {e}")
+                say(f"⚠️  Cache store failed for '{query_text[:60]}': {e}")
 
         future = self._writer.submit(store)
         with self._pending_lock:
@@ -377,7 +377,7 @@ class SerpApiCache:
         with self._model_lock:
             if self._model is None:
                 if self.verbose:
-                    print(f"⏳ Loading embedding model '{self._model_name}' (first-time only)...")
+                    say(f"⏳ Loading embedding model '{self._model_name}' (first-time only)...")
                 # Windows: scikit-learn's OpenMP runtime (vcomp140) takes ~20s to load once torch's
                 # is loaded, which is the order sentence_transformers imports them in. Loading
                 # scikit-learn first takes ~1.5s.
@@ -392,7 +392,7 @@ class SerpApiCache:
                 except Exception:
                     self._model = SentenceTransformer(self._model_name)  # not downloaded yet
                 if self.verbose:
-                    print("✅ Embedding model loaded.\n")
+                    say("✅ Embedding model loaded.\n")
 
     def _embed(self, text: str) -> list[float]:
         """Encode text into a float vector using Sentence-Transformers. Safe across threads."""
@@ -429,19 +429,20 @@ class SerpApiCache:
         # Dosage guard — check after threshold to avoid unnecessary work
         if _dosage_guard_fires(query_text, best_query_text):
             if self.verbose:
-                print(f"⚠️  DOSAGE GUARD | blocked hit | '{query_text[:40]}' vs '{best_query_text[:40]}'")
+                say(f"⚠️  DOSAGE GUARD | blocked hit | '{query_text[:40]}' vs '{best_query_text[:40]}'")
             return None
 
         return (best_score, best_key)
 
     def _call_serpapi(self, params: dict) -> dict:
-        """Make the actual SerpApi call."""
+        """Make the actual SerpApi call. Times out after SERPAPI_TIMEOUT seconds (default 30)."""
         try:
             import serpapi
         except ImportError:
             raise ImportError("serpapi package not installed. Run: pip install serpapi")
 
-        client = serpapi.Client(api_key=self.api_key)
+        # The client's default is no timeout: one hung request would block its search forever.
+        client = serpapi.Client(api_key=self.api_key, timeout=float(os.getenv("SERPAPI_TIMEOUT", "30")))
         result = client.search({**params})
         return dict(result)
 

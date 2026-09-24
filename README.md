@@ -197,6 +197,16 @@ writer loaded the embedding model while Python was shutting down, and that impor
 is now loaded on the calling thread before the write is handed off. Verified across two processes:
 the second one gets a cache hit with 0 API calls.
 
+### 9. An emoji made every search cost a credit
+
+With the API running in the background on Windows, output goes to a log whose encoding can't show
+emoji. The "✅ Redis connected" message then raised an error *inside* the Redis connection code, the
+cache read that as "Redis unreachable", and it silently switched to passthrough: every search
+went to SerpApi, while Redis was up the whole time.
+
+**Fix:** every message from the cache library goes through a print helper that replaces characters
+the console can't show instead of raising. Verified with a cp1252 console: the cache stays on Redis.
+
 ---
 
 ## What one search costs
@@ -230,6 +240,8 @@ pip install -r requirements.txt -r api/requirements.txt
 SERP_API_KEY=...
 GEMINI_API_KEY=...
 # optional: GEMINI_MODEL=gemini-2.5-flash,gemini-2.5-flash-lite
+# optional: MAX_CONCURRENT_SEARCHES=4  SEARCH_TIMEOUT_S=90  SERPAPI_TIMEOUT=30
+# optional: UI_ORIGINS=http://localhost:3000   (CORS)
 
 # 4. API
 uvicorn api.main:app --port 8000
@@ -243,11 +255,29 @@ cd web && npm install && npm run dev
 | Endpoint | What it returns |
 |---|---|
 | `GET /api/search/stream?q=Stamlo 5&pincode=110001` | Server-Sent Events: `main`, `main_update`, `alternatives`, `main_links`, plus every SerpApi call live and a summary |
+| `GET /api/search?q=Stamlo 5&pincode=110001` | The same search as one JSON response. 422 bad input, 429 busy, 504 deadline passed, 502 pipeline error (the last two still include partial results) |
 | `GET /api/health` | Redis status, model warm-up state, whether keys are configured (never the keys) |
 | `GET /api/account` | SerpApi plan usage (free call, cached 30 s) |
 | `GET /api/stats` | Cache hit rate, credits spent and saved in this process |
 | `GET /api/cache/lab?q=...` | What the cache *would* do with a query: nearest cached queries, similarity, dosage guard. Read-only, 0 credits |
 | `GET /api/cache/entries` | Everything in Redis, with time left |
+
+### Guards
+
+A search can spend up to 12 credits, so the API protects them:
+
+- **Input is checked before anything runs.** A bad PIN or an empty query is refused and costs nothing.
+- **At most `MAX_CONCURRENT_SEARCHES` (default 4) run at once.** More are refused with a clear message.
+  A search keeps its slot until its pipeline finishes, even if the browser disconnects.
+- **`SEARCH_TIMEOUT_S` (default 90)** caps how long a request waits; anything fetched so far is still
+  returned and cached.
+- **`SERPAPI_TIMEOUT` (default 30 s)** on every SerpApi request. The client's default is no timeout.
+- **The live call log is trimmed** as soon as no running search can still need an entry, so a
+  long-running server doesn't grow.
+
+On the stream endpoint a refused search still answers `200` with an `error` event (`code`:
+`invalid_query`, `invalid_pincode`, `busy`, `timeout`, `pipeline_error`) followed by `done`, because a
+browser `EventSource` can't read an HTTP error body.
 
 ### Keys and secrets
 
@@ -263,6 +293,7 @@ cd web && npm install && npm run dev
 ```bash
 python scripts/test_p5_generics.py                           # 101 offline checks, 0 credits
 python scripts/test_p4_delivery_cost.py                      # delivery rules, 0 credits
+python scripts/test_api.py                                   # 38 API checks, stubbed pipeline, 0 credits
 python scripts/test_p5_generics.py --llm "dollo 650" "Telma 40 H"          # Gemini only, 0 SerpApi credits
 python scripts/test_p5_generics.py "Stamlo 5" 110001 --cache-only          # replay from Redis, 0 credits
 python scripts/test_p5_generics.py "Stamlo 5" 110001                       # live run, full call log
