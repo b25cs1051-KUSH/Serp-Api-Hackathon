@@ -1,6 +1,6 @@
 import sys
 import json
-from pharmawatch.search import search_prices, search_platform_price, _get_cache
+from pharmawatch.search import search_prices, search_platform_price, _get_cache, warm_up
 
 # Set UTF-8 encoding for Windows console output
 if sys.platform == "win32":
@@ -16,6 +16,7 @@ def main():
     print("  - Type 'q' or 'exit' to quit\n")
 
     cache = _get_cache(verbose=False)
+    print(f"Warm-up (Redis + embedding model): {warm_up(verbose=False):.0f} ms")
 
     while True:
         try:

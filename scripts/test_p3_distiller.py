@@ -1,7 +1,7 @@
 import sys
 import json
-from pharmawatch.search import search_prices, _get_cache
-from pharmawatch.distiller import distill_shopping_results, enrich_direct_merchant_links
+from pharmawatch.search import search_prices, warm_up
+from pharmawatch.distiller import distill_shopping_results
 
 # Set UTF-8 encoding for Windows console output
 if sys.platform == "win32":
@@ -16,6 +16,7 @@ def main():
     print("  - Type 'all' after medicine to show unfiltered stores as well")
     print("  - Type 'q' or 'exit' to quit\n")
     print("Tip: Run 'docker compose up -d' to enable Redis caching.\n")
+    print(f"Warm-up (Redis + embedding model): {warm_up(verbose=False):.0f} ms\n")
 
     while True:
         try:
@@ -41,10 +42,8 @@ def main():
         
         distilled = distill_shopping_results(raw_result, filter_known_platforms=filter_known)
 
-        if distilled:
-            print(f"Resolving exact 'Visit Site' merchant URLs for all items...")
-            distilled = enrich_direct_merchant_links(distilled)
-
+        # Exact 'Visit Site' URLs (enrich_direct_merchant_links) cost 1 SerpApi call per
+        # listing — they will be resolved only when the user clicks a link in the UI.
 
         print("\n" + "=" * 70)
         print(f" DISTILLED PHARMA RESULTS ({len(distilled)} items extracted):")
@@ -59,7 +58,7 @@ def main():
                 print(f"     Price (INR)       : ₹{item['price_inr']:.2f} (Raw: '{item['raw_price_str']}')")
                 print(f"     Delivery          : {item['availability']}")
                 print(f"     Thumbnail URL     : {item['thumbnail']}")
-                print(f"     Direct Visit Site : {item['direct_link']}")
+                print(f"     Direct Visit Site : {'resolved on click (page_token ready)' if item['page_token'] else 'n/a (no page_token)'}")
                 print(f"     Google Shopping   : {item['google_link']}")
                 print(f"     Store Search      : {item['search_link']}")
                 print("-" * 70)

@@ -2,6 +2,8 @@
 cache.py — Core SerpApiCache class.
 
 Flow on every search():
+  0. Exact match: same params (query normalized: case, spaces, '500 mg'→'500mg') seen
+     before → return straight from Redis (no embedding)
   1. Encode the query into a vector embedding
   2. Compare against all cached embeddings via cosine similarity
   3. Run dosage guard: if both queries contain numbers and the sets differ → force MISS
@@ -54,6 +56,26 @@ def _dosage_guard_fires(query_a: str, query_b: str) -> bool:
     if not nums_a or not nums_b:
         return False  # no dosage in at least one query — let cosine decide
     return nums_a != nums_b
+
+
+# ─────────────────────────────────────────────
+# Query normalization
+# ─────────────────────────────────────────────
+
+_UNIT_SPACING = re.compile(r"(\d+(?:\.\d+)?)\s+(mg|mcg|g|ml|iu|%)\b", re.IGNORECASE)
+
+
+def _normalize_q(q: str) -> str:
+    """'Dolo  650 MG price' → 'dolo 650mg price' — lowercase, single spaces, units glued to numbers."""
+    q = " ".join(str(q).lower().split())
+    return _UNIT_SPACING.sub(r"\1\2", q)
+
+
+def _cache_params(params: dict) -> dict:
+    """Params as the cache sees them (key + embedding). SerpApi still gets the originals."""
+    if "q" not in params:
+        return params
+    return {**params, "q": _normalize_q(params["q"])}
 
 
 # ─────────────────────────────────────────────
@@ -127,7 +149,7 @@ class SerpApiCache:
         self._model = None  # loaded lazily
 
         # ── Stats ─────────────────────────────────────────────────
-        self.stats = {"hits": 0, "misses": 0, "api_calls_saved": 0}
+        self.stats = {"hits": 0, "exact_hits": 0, "misses": 0, "api_calls_saved": 0}
 
     # ─────────────────────────────────────────────
     # Public API
@@ -150,12 +172,31 @@ class SerpApiCache:
             self.stats["misses"] += 1
             return self._call_serpapi(params)
 
-        query_text = self._params_to_query_string(params)
-        embedding = self._embed(query_text)
-        cache_key = self._make_key(params)
+        key_params = _cache_params(params)
+        query_text = self._params_to_query_string(key_params)
+        cache_key = self._make_key(key_params)
+
+        # 0. Exact match — identical params were asked before. One Redis GET,
+        #    no embedding, no similarity scan.
+        exact_hit = self.backend.get_by_key(cache_key)
+        if exact_hit is not None:
+            self.stats["hits"] += 1
+            self.stats["exact_hits"] += 1
+            self.stats["api_calls_saved"] += 1
+            if self.verbose:
+                print(f"🟢 CACHE HIT (EXACT) | query='{query_text[:60]}'")
+            return exact_hit
+
+        # Token-only requests (e.g. google_immersive_product with page_token → the
+        # final product link) have no text to compare: every one would read
+        # 'engine:google_immersive_product' and match the first product cached.
+        # Like the dosage guard, a different token must always call SerpApi,
+        # so they are exact-match only.
+        is_text_query = "q" in params
+        embedding = self._embed(query_text) if is_text_query else []
 
         # 1. Check for semantic match in cache
-        best_match = self._find_best_match(embedding, query_text)
+        best_match = self._find_best_match(embedding, query_text) if is_text_query else None
 
         if best_match:
             similarity, matched_key = best_match
@@ -179,6 +220,17 @@ class SerpApiCache:
         self.backend.set(cache_key, result, embedding, effective_ttl, query_text)
 
         return result
+
+    def warm_up(self) -> float:
+        """
+        Load the embedding model and run one dummy encode now, at startup, so the
+        first real search doesn't pay the model-loading delay. Returns elapsed ms.
+        """
+        import time
+        t0 = time.perf_counter()
+        self._load_model()
+        self._model.encode("warm up", normalize_embeddings=True)
+        return (time.perf_counter() - t0) * 1000
 
     def flush(self) -> None:
         """Clear all cached entries. No-op if Redis is unavailable."""
@@ -212,7 +264,7 @@ class SerpApiCache:
         print(f"  📊 SerpApi Cache Statistics")
         print("─" * 45)
         print(f"  Total searches   : {s['total_searches']}")
-        print(f"  Cache hits       : {s['hits']}  ✅")
+        print(f"  Cache hits       : {s['hits']}  ✅  (exact: {s['exact_hits']})")
         print(f"  Cache misses     : {s['misses']}  ❌")
         print(f"  Hit rate         : {s['hit_rate_pct']}%")
         print(f"  API calls saved  : {s['api_calls_saved']}")
@@ -223,8 +275,7 @@ class SerpApiCache:
     # Private helpers
     # ─────────────────────────────────────────────
 
-    def _embed(self, text: str) -> list[float]:
-        """Encode text into a float vector using Sentence-Transformers."""
+    def _load_model(self) -> None:
         if self._model is None:
             if self.verbose:
                 print(f"⏳ Loading embedding model '{self._model_name}' (first-time only)...")
@@ -232,6 +283,10 @@ class SerpApiCache:
             self._model = SentenceTransformer(self._model_name)
             if self.verbose:
                 print("✅ Embedding model loaded.\n")
+
+    def _embed(self, text: str) -> list[float]:
+        """Encode text into a float vector using Sentence-Transformers."""
+        self._load_model()
         return self._model.encode(text, normalize_embeddings=True).tolist()
 
     def _find_best_match(self, query_embedding: list[float], query_text: str) -> Optional[tuple[float, str]]:
@@ -249,6 +304,8 @@ class SerpApiCache:
         best_query_text = ""
 
         for record in records:
+            if not record["embedding"]:
+                continue  # token-only entry (product link) — exact-match only
             score = _cosine_similarity(query_embedding, record["embedding"])
             if score > best_score:
                 best_score = score

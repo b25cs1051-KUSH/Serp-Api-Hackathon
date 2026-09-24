@@ -37,6 +37,11 @@ def _get_cache(verbose: bool = True) -> SerpApiCache:
     return _cache_instance
 
 
+def warm_up(verbose: bool = True) -> float:
+    """Call once at app start: connects Redis and pre-loads the embedding model. Returns ms."""
+    return _get_cache(verbose=verbose).warm_up()
+
+
 # ─────────────────────────────────────────────
 # P2.1 — Primary price search via google_shopping
 # ─────────────────────────────────────────────
