@@ -61,19 +61,32 @@ def identify_platform(source: str, link: str) -> Optional[str]:
     Returns normalized platform name or None if not matched.
     """
     combined = f"{source} {link}".lower()
+    squashed = re.sub(r"[^a-z0-9]", "", combined)
 
-    if "1mg" in combined:
-        return "1mg"
-    elif "pharmeasy" in combined:
-        return "PharmEasy"
-    elif "netmeds" in combined:
-        return "Netmeds"
-    elif "apollo" in combined:
-        return "Apollo Pharmacy"
-    elif "medplus" in combined:
-        return "Medplus"
-    
+    for needle, name in PLATFORM_NAME_PATTERNS:
+        if needle in squashed:
+            return name
+
     return None
+
+
+# Every platform with delivery rules in notes/postal_codes_delivery_rules.json.
+# Needles are matched against source + link, lowercased with non-alphanumerics removed.
+PLATFORM_NAME_PATTERNS = [
+    ("1mg", "1mg"),
+    ("pharmeasy", "PharmEasy"),
+    ("netmeds", "Netmeds"),
+    ("truemeds", "Truemeds"),
+    ("apollo", "Apollo Pharmacy"),
+    ("medplus", "Medplus"),
+    ("dawaadost", "Dawaa Dost"),
+    ("magicine", "Magicine Pharma"),
+    ("chemist180", "Chemist180"),
+    ("emedicalwala", "eMedicalwala"),
+    ("medivik", "Medivik"),
+    ("medizinhub", "Medizinhub"),
+    ("kogland", "Kogland Commerce"),
+]
 
 
 PLATFORM_DOMAIN_MAP = {

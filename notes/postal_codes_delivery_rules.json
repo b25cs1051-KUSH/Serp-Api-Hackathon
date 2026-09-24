@@ -1,9 +1,10 @@
-﻿{
+{
   "_meta": {
     "project": "PharmaWatch / Aggregator Engine",
     "description": "Zonal PIN code mapping and platform checkout price rule engine for Indian e-pharmacies.",
     "version": "2026.1",
-    "currency": "INR"
+    "currency": "INR",
+    "order_value_slabs": "Optional per zone: fee = the slab with the highest min_order <= order value; overrides delivery_fee."
   },
   "pin_zones": {
     "metro": {
@@ -33,7 +34,7 @@
       "display_name": "Tata 1mg",
       "serviceable": true,
       "fee_type": "tier_based",
-      "platform_fee": 0.00,
+      "platform_fee": 0.0,
       "zones": {
         "metro": {
           "delivery_fee": 50,
@@ -60,14 +61,13 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Offers express/same-day delivery via local dark stores in select Metros for a nominal surcharge."
+      }
     },
     "pharmeasy": {
       "display_name": "PharmEasy",
       "serviceable": true,
       "fee_type": "tier_based",
-      "platform_fee": 0.00,
+      "platform_fee": 0.0,
       "zones": {
         "metro": {
           "delivery_fee": 120,
@@ -94,14 +94,13 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Plus membership removes convenience/platform fees and provides free delivery on orders above Γé╣499."
+      }
     },
     "apollo_247": {
       "display_name": "Apollo 24|7",
       "serviceable": true,
       "fee_type": "tier_based",
-      "platform_fee": 0.00,
+      "platform_fee": 0.0,
       "zones": {
         "metro": {
           "delivery_fee": 80,
@@ -128,19 +127,23 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "10-minute delivery active in select metro areas via Apollo retail network; free shipping threshold starts as low as Γé╣199."
+      }
     },
     "netmeds": {
       "display_name": "Netmeds",
       "serviceable": true,
       "fee_type": "tiered_order_value",
-      "platform_fee": 0.00,
+      "platform_fee": 0.0,
       "zones": {
         "metro": {
           "delivery_fee": 30,
           "free_delivery_threshold": 500,
-          "estimated_days": "1-2 Days"
+          "estimated_days": "1-2 Days",
+          "order_value_slabs": [
+            {"min_order": 0, "fee": 39},
+            {"min_order": 250, "fee": 29},
+            {"min_order": 500, "fee": 0}
+          ]
         },
         "tier2": {
           "delivery_fee": 30,
@@ -162,8 +165,7 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Order value < Γé╣250 incurs Γé╣39 delivery; Γé╣250ΓÇôΓé╣499 incurs Γé╣29; Γé╣500+ is free for non-NFM users in Metros."
+      }
     },
     "truemeds": {
       "display_name": "Truemeds",
@@ -196,14 +198,13 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Focuses heavily on generic alternatives with aggressive discounts; delivery cost structured per cart total."
+      }
     },
     "medplus_mart": {
       "display_name": "MedPlus Mart",
       "serviceable": true,
       "fee_type": "store_pickup_or_delivery",
-      "platform_fee": 0.00,
+      "platform_fee": 0.0,
       "zones": {
         "metro": {
           "delivery_fee": 0,
@@ -216,7 +217,7 @@
           "estimated_days": "Same Day / Store Pickup"
         },
         "tier3": {
-          "delivery_fee": 0.00,
+          "delivery_fee": 0.0,
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable (Store pickup only)"
         },
@@ -230,8 +231,7 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Offers zero delivery fees if selected as 'Store Pickup' at nearest physical MedPlus outlet."
+      }
     },
     "dawaadost": {
       "display_name": "Dawaa Dost",
@@ -264,8 +264,7 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Specializes in high-discount generic medicines; standard free home delivery threshold is Γé╣850 across standard locations."
+      }
     },
     "magicine_pharma": {
       "display_name": "Magicine Pharma",
@@ -276,12 +275,22 @@
         "metro": {
           "delivery_fee": 119,
           "free_delivery_threshold": null,
-          "estimated_days": "2-3 Days"
+          "estimated_days": "2-3 Days",
+          "order_value_slabs": [
+            {"min_order": 0, "fee": 119},
+            {"min_order": 1300, "fee": 99},
+            {"min_order": 3999, "fee": 69, "condition": "prepaid only"}
+          ]
         },
         "tier2": {
           "delivery_fee": 119,
           "free_delivery_threshold": null,
-          "estimated_days": "3-5 Days"
+          "estimated_days": "3-5 Days",
+          "order_value_slabs": [
+            {"min_order": 0, "fee": 119},
+            {"min_order": 1300, "fee": 99},
+            {"min_order": 3999, "fee": 69, "condition": "prepaid only"}
+          ]
         },
         "tier3": {
           "delivery_fee": 149,
@@ -298,8 +307,7 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "No free shipping threshold; order value < Γé╣1300 pays Γé╣119; Γé╣1300ΓÇôΓé╣3998 pays Γé╣99; Γé╣3999+ pays Γé╣69 shipping (prepaid only). General items charge flat Γé╣199."
+      }
     },
     "chemist180": {
       "display_name": "Chemist180",
@@ -332,14 +340,13 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Applies additional GST calculation at checkout; minimum Γé╣1000 order needed for free delivery."
+      }
     },
     "emedicalwala": {
       "display_name": "eMedicalwala",
       "serviceable": true,
       "fee_type": "weight_and_value_based",
-      "platform_fee": 0.00,
+      "platform_fee": 0.0,
       "zones": {
         "metro": {
           "delivery_fee": 50,
@@ -366,8 +373,7 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Shipping is computed based on consignment weight and order amount; liquid formulations carry regional courier restrictions."
+      }
     },
     "medivik": {
       "display_name": "Medivik",
@@ -381,7 +387,7 @@
           "estimated_days": "1-3 Days"
         },
         "tier2": {
-          "display_fee": 45,
+          "delivery_fee": 45,
           "free_delivery_threshold": 1000,
           "estimated_days": "3-5 Days"
         },
@@ -400,8 +406,7 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Standard Γé╣45 fee applies below Γé╣1000 order value."
+      }
     },
     "medizinhub": {
       "display_name": "Medizinhub",
@@ -434,8 +439,7 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "Regional distributor platform with location-based courier dispatch."
+      }
     },
     "kogland_commerce": {
       "display_name": "Kogland Commerce",
@@ -468,8 +472,7 @@
           "free_delivery_threshold": null,
           "estimated_days": "Non-serviceable"
         }
-      },
-      "notes": "B2B medical supply platform. Shipping is based on actual/volumetric carton weight; higher free-shipping thresholds apply."
+      }
     }
   }
 }
