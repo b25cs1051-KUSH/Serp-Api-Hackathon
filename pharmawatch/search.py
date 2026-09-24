@@ -46,13 +46,15 @@ def warm_up(verbose: bool = True) -> float:
 # P2.1 — Primary price search via google_shopping
 # ─────────────────────────────────────────────
 
-def search_prices(medicine_name: str, verbose: bool = True) -> dict:
+def search_prices(medicine_name: str, verbose: bool = True, exact_only: bool = False) -> dict:
     """
     Search for prices of a medicine across Indian pharma platforms.
 
     Engine  : google_shopping
-    Query   : "{medicine_name} tablet price India"
+    Query   : "{medicine_name} price"
     TTL     : 86400 (24 hours)
+    exact_only : cache hit only on this exact medicine name (no similarity match) —
+                 used for brand names from compositions.md
     Returns : Raw SerpApi shopping JSON (pass to distiller.distill_shopping_results)
     """
     cache = _get_cache(verbose=verbose)
@@ -63,7 +65,7 @@ def search_prices(medicine_name: str, verbose: bool = True) -> dict:
         "gl": "in",
         "hl": "en",
     }
-    return cache.search(params, ttl=_PRICE_TTL)
+    return cache.search(params, ttl=_PRICE_TTL, exact_only=exact_only)
 
 
 # ─────────────────────────────────────────────
@@ -133,20 +135,23 @@ def get_direct_merchant_link(
         "page_token": page_token,
     }
     res = cache.search(params, ttl=_PRICE_TTL)
-    stores = res.get("product_results", {}).get("stores", [])
-    if not stores:
-        return None
+    return pick_store_link(res.get("product_results", {}).get("stores", []), target_platform)
 
-    if target_platform:
-        target_clean = target_platform.lower().replace(" ", "")
-        for store in stores:
-            if isinstance(store, dict) and store.get("link"):
-                store_name = (store.get("name") or "").lower().replace(" ", "")
-                if target_clean in store_name or store_name in target_clean:
-                    return store["link"]
 
-    if isinstance(stores[0], dict) and stores[0].get("link"):
-        return stores[0]["link"]
+def pick_store_link(stores: list, target_platform: Optional[str]) -> Optional[str]:
+    """
+    The store link belonging to `target_platform` (same platform detection as the distiller:
+    'Apollo 247' / apollopharmacy.in → 'Apollo Pharmacy'). None if that platform isn't among the
+    stores — never another pharmacy's page. Without a target, the first store with a link.
+    """
+    from pharmawatch.distiller import identify_platform
+
+    with_links = [s for s in stores or [] if isinstance(s, dict) and s.get("link")]
+    if not target_platform:
+        return with_links[0]["link"] if with_links else None
+    for store in with_links:
+        if identify_platform(store.get("name") or "", store["link"]) == target_platform:
+            return store["link"]
     return None
 
 

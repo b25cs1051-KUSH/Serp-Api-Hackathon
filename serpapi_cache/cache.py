@@ -9,6 +9,10 @@ Flow on every search():
   3. Run dosage guard: if both queries contain numbers and the sets differ → force MISS
   4. If similarity >= threshold AND dosage guard passes → return cached result (CACHE HIT)
   5. If below threshold or guard fires → call SerpApi → store result + embedding (CACHE MISS)
+     The store runs on a background writer thread, so the caller gets the result without
+     waiting for Redis. wait_for_writes() blocks until pending stores land (also runs at exit).
+
+search() is thread-safe: parallel searches share the embedding model behind a lock.
 
 If Redis is unavailable at startup, the cache runs in passthrough mode:
   every search() call hits SerpApi directly — no caching, no crash.
@@ -20,9 +24,31 @@ import hashlib
 import json
 import os
 import re
+import threading
+import time
+from concurrent.futures import Future, ThreadPoolExecutor, wait
+from contextlib import contextmanager
 from typing import Any, Optional
 
 from .backends import BaseBackend, RedisBackend
+
+
+# ─────────────────────────────────────────────
+# Call log tags — say *why* a search happened
+# ─────────────────────────────────────────────
+
+_context = threading.local()
+
+
+@contextmanager
+def call_tag(tag: str):
+    """Label every search() made on this thread inside the block, e.g. 'direct link: 1mg'."""
+    previous = getattr(_context, "tag", None)
+    _context.tag = tag
+    try:
+        yield
+    finally:
+        _context.tag = previous
 
 
 # ─────────────────────────────────────────────
@@ -147,30 +173,71 @@ class SerpApiCache:
         # ── Embedding model (lazy-loaded on first use) ────────────
         self._model_name = embedding_model
         self._model = None  # loaded lazily
+        self._model_lock = threading.Lock()
+
+        # ── Background Redis writer ──────────────────────────────
+        # One thread keeps writes ordered; pending writes finish at interpreter exit.
+        self._writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="serpapi-cache-writer")
+        self._pending_writes: set[Future] = set()
+        self._pending_lock = threading.Lock()
 
         # ── Stats ─────────────────────────────────────────────────
         self.stats = {"hits": 0, "exact_hits": 0, "misses": 0, "api_calls_saved": 0}
+        self.call_log: list[dict] = []
+        self._log_lock = threading.Lock()
 
     # ─────────────────────────────────────────────
     # Public API
     # ─────────────────────────────────────────────
 
-    def search(self, params: dict, ttl: Optional[int] = None) -> dict:
+    def search(self, params: dict, ttl: Optional[int] = None, exact_only: bool = False) -> dict:
         """
         Drop-in replacement for serpapi.Client.search().
         Returns cached result if a semantically similar query exists
         and the dosage guard does not block the match.
 
+        exact_only=True skips the similarity lookup: only the identical (normalized) query
+        can hit. Use it for exact product names — 'Calpol 650' must never be served
+        'Dolo 650'. The result is still stored with its embedding for later reuse.
+
         If Redis is unavailable (backend is None), skips cache entirely
         and calls SerpApi directly — passthrough mode.
+
+        Every call is recorded in the call log (see pop_call_log()).
         """
+        started = time.perf_counter()
+        outcome, result = self._search(params, ttl, exact_only)
+        entry = {
+            "start": started,
+            "end": time.perf_counter(),
+            "engine": params.get("engine", ""),
+            "query": params.get("q") or f"page_token …{str(params.get('page_token', ''))[-10:]}",
+            "outcome": outcome,
+            "credit": outcome.startswith("api_call"),
+            "tag": getattr(_context, "tag", None),
+        }
+        with self._log_lock:
+            self.call_log.append(entry)
+        return result
+
+    def pop_call_log(self) -> list[dict]:
+        """Return and clear the call log: start/end (perf_counter), engine, query, outcome, credit, tag."""
+        with self._log_lock:
+            log, self.call_log = self.call_log, []
+        return log
+
+    def _search(self, params: dict, ttl: Optional[int], exact_only: bool) -> tuple[str, dict]:
         # Passthrough mode — Redis unavailable
         if self.backend is None:
             if self.verbose:
                 query_text = self._params_to_query_string(params)
                 print(f"⚡ PASSTHROUGH | Redis down — calling SerpApi directly for '{query_text[:60]}'")
             self.stats["misses"] += 1
-            return self._call_serpapi(params)
+            return "api_call (passthrough)", self._call_serpapi(params)
+
+        # Read-your-writes: a store still in flight (a few ms) lands before this lookup,
+        # so a repeat query always hits. Only the search that made the API call skips waiting.
+        self.wait_for_writes()
 
         key_params = _cache_params(params)
         query_text = self._params_to_query_string(key_params)
@@ -185,7 +252,7 @@ class SerpApiCache:
             self.stats["api_calls_saved"] += 1
             if self.verbose:
                 print(f"🟢 CACHE HIT (EXACT) | query='{query_text[:60]}'")
-            return exact_hit
+            return "exact_hit", exact_hit
 
         # Token-only requests (e.g. google_immersive_product with page_token → the
         # final product link) have no text to compare: every one would read
@@ -193,10 +260,11 @@ class SerpApiCache:
         # Like the dosage guard, a different token must always call SerpApi,
         # so they are exact-match only.
         is_text_query = "q" in params
-        embedding = self._embed(query_text) if is_text_query else []
+        use_semantic = is_text_query and not exact_only
+        embedding = self._embed(query_text) if use_semantic else None  # exact_only: embed at store time
 
         # 1. Check for semantic match in cache
-        best_match = self._find_best_match(embedding, query_text) if is_text_query else None
+        best_match = self._find_best_match(embedding, query_text) if use_semantic else None
 
         if best_match:
             similarity, matched_key = best_match
@@ -206,7 +274,7 @@ class SerpApiCache:
                 self.stats["api_calls_saved"] += 1
                 if self.verbose:
                     print(f"🟢 CACHE HIT  | similarity={similarity:.3f} | query='{query_text[:60]}'")
-                return cached_result
+                return f"semantic_hit ({similarity:.3f})", cached_result
 
         # 2. Cache miss — call SerpApi
         self.stats["misses"] += 1
@@ -215,11 +283,17 @@ class SerpApiCache:
 
         result = self._call_serpapi(params)
 
-        # 3. Store result + embedding + query_text
+        # 3. Store result + embedding + query_text — in the background
         effective_ttl = ttl if ttl is not None else self.default_ttl
-        self.backend.set(cache_key, result, embedding, effective_ttl, query_text)
+        self._store_async(cache_key, result, embedding, effective_ttl, query_text, is_text_query)
 
-        return result
+        return "api_call", result
+
+    def wait_for_writes(self, timeout: Optional[float] = None) -> None:
+        """Block until every background Redis store has finished."""
+        with self._pending_lock:
+            pending = set(self._pending_writes)
+        wait(pending, timeout=timeout)
 
     def warm_up(self) -> float:
         """
@@ -236,6 +310,7 @@ class SerpApiCache:
         """Clear all cached entries. No-op if Redis is unavailable."""
         if self.backend is None:
             return
+        self.wait_for_writes()
         self.backend.flush()
         if self.verbose:
             print("🗑️  Cache flushed.")
@@ -275,19 +350,55 @@ class SerpApiCache:
     # Private helpers
     # ─────────────────────────────────────────────
 
+    def _store_async(self, key: str, result: dict, embedding: Optional[list[float]],
+                     ttl: int, query_text: str, is_text_query: bool) -> None:
+        if embedding is None and is_text_query:
+            # Load the model here, not on the writer: a first-time import during interpreter
+            # shutdown fails and the write is lost. No-op after warm_up().
+            self._load_model()
+
+        def store():
+            try:
+                vector = embedding if embedding is not None else (self._embed(query_text) if is_text_query else [])
+                self.backend.set(key, result, vector, ttl, query_text)
+            except Exception as e:  # a failed store only costs a future cache hit
+                print(f"⚠️  Cache store failed for '{query_text[:60]}': {e}")
+
+        future = self._writer.submit(store)
+        with self._pending_lock:
+            self._pending_writes.add(future)
+        future.add_done_callback(self._forget_write)
+
+    def _forget_write(self, future: Future) -> None:
+        with self._pending_lock:
+            self._pending_writes.discard(future)
+
     def _load_model(self) -> None:
-        if self._model is None:
-            if self.verbose:
-                print(f"⏳ Loading embedding model '{self._model_name}' (first-time only)...")
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(self._model_name)
-            if self.verbose:
-                print("✅ Embedding model loaded.\n")
+        with self._model_lock:
+            if self._model is None:
+                if self.verbose:
+                    print(f"⏳ Loading embedding model '{self._model_name}' (first-time only)...")
+                # Windows: scikit-learn's OpenMP runtime (vcomp140) takes ~20s to load once torch's
+                # is loaded, which is the order sentence_transformers imports them in. Loading
+                # scikit-learn first takes ~1.5s.
+                try:
+                    import sklearn.utils._openmp_helpers  # noqa: F401
+                except ImportError:
+                    pass
+                from sentence_transformers import SentenceTransformer
+                try:
+                    # Local copy first: skips ~7s of HuggingFace update checks on every start.
+                    self._model = SentenceTransformer(self._model_name, local_files_only=True)
+                except Exception:
+                    self._model = SentenceTransformer(self._model_name)  # not downloaded yet
+                if self.verbose:
+                    print("✅ Embedding model loaded.\n")
 
     def _embed(self, text: str) -> list[float]:
-        """Encode text into a float vector using Sentence-Transformers."""
+        """Encode text into a float vector using Sentence-Transformers. Safe across threads."""
         self._load_model()
-        return self._model.encode(text, normalize_embeddings=True).tolist()
+        with self._model_lock:
+            return self._model.encode(text, normalize_embeddings=True).tolist()
 
     def _find_best_match(self, query_embedding: list[float], query_text: str) -> Optional[tuple[float, str]]:
         """
