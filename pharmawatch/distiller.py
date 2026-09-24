@@ -185,7 +185,8 @@ def distill_shopping_results(raw_json: dict, filter_known_platforms: bool = True
         platform_logo = item.get("source_icon") or ""
         platform_name = platform or source or "Unknown"
         platform_domain = PLATFORM_DOMAIN_MAP.get(platform_name, "")
-        direct_link = build_direct_store_link(platform_name, title, raw_link)
+        page_token = item.get("immersive_product_page_token") or ""
+        search_link = build_direct_store_link(platform_name, title, raw_link)
 
         distilled.append({
             "platform": platform_name,
@@ -194,16 +195,37 @@ def distill_shopping_results(raw_json: dict, filter_known_platforms: bool = True
             "price_inr": price_inr,
             "medicine_name": title,
             "availability": delivery,
-            "link": direct_link,
-            "direct_link": direct_link,
+            "link": search_link,
+            "direct_link": search_link,
+            "search_link": search_link,
             "google_link": google_shopping_link,
             "google_shopping_link": google_shopping_link,
             "raw_price_str": str(raw_price) if raw_price else f"₹{price_inr}",
             "thumbnail": thumbnail,
+            "page_token": page_token,
         })
 
-
     return distilled
+
+
+def enrich_direct_merchant_links(distilled_items: List[Dict], max_items: int = 5) -> List[Dict]:
+    """
+    On-demand enrichment: Resolve exact 'Visit site' blue button URLs (1mg.com/drugs/..., apollopharmacy.in/medicine/...)
+    using page_token for top N items.
+    """
+    from .search import get_direct_merchant_link
+
+    for item in distilled_items[:max_items]:
+        token = item.get("page_token")
+        if token:
+            resolved = get_direct_merchant_link(token, verbose=False)
+            if resolved:
+                sanitized = sanitize_link(resolved)
+                item["direct_link"] = sanitized
+                item["link"] = sanitized
+
+    return distilled_items
+
 
 
 

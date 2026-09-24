@@ -19,15 +19,22 @@ load_dotenv()
 # ─────────────────────────────────────────────
 
 _PRICE_TTL = 86_400  # 24 hours — prices cached per day
+_cache_instance: Optional[SerpApiCache] = None
+
 
 def _get_cache(verbose: bool = True) -> SerpApiCache:
-    """Build a SerpApiCache instance. Redis auto-fallback is handled by the cache itself."""
-    return SerpApiCache(
-        api_key=os.getenv("SERP_API_KEY"),
-        similarity_threshold=0.88,
-        default_ttl=_PRICE_TTL,
-        verbose=verbose,
-    )
+    """Build or return singleton SerpApiCache instance. Redis auto-fallback handled internally."""
+    global _cache_instance
+    if _cache_instance is None:
+        _cache_instance = SerpApiCache(
+            api_key=os.getenv("SERP_API_KEY"),
+            similarity_threshold=0.88,
+            default_ttl=_PRICE_TTL,
+            verbose=verbose,
+        )
+    else:
+        _cache_instance.verbose = verbose
+    return _cache_instance
 
 
 # ─────────────────────────────────────────────
@@ -96,3 +103,29 @@ def search_platform_price(
         "hl": "en",
     }
     return cache.search(params, ttl=_PRICE_TTL)
+
+
+# ─────────────────────────────────────────────
+# P2.3 — Extract exact 'Visit Site' Merchant URL via Page Token
+# ─────────────────────────────────────────────
+
+def get_direct_merchant_link(page_token: str, verbose: bool = False) -> Optional[str]:
+    """
+    Query SerpApi google_immersive_product with page_token to extract the exact
+    blue 'Visit site' merchant landing page URL (e.g. 1mg.com/drugs/..., apollopharmacy.in/medicine/...).
+    Result is cached in SerpApiCache for 24 hours.
+    """
+    if not page_token:
+        return None
+
+    cache = _get_cache(verbose=verbose)
+    params = {
+        "engine": "google_immersive_product",
+        "page_token": page_token,
+    }
+    res = cache.search(params, ttl=_PRICE_TTL)
+    stores = res.get("product_results", {}).get("stores", [])
+    if stores and isinstance(stores[0], dict) and stores[0].get("link"):
+        return stores[0]["link"]
+    return None
+
