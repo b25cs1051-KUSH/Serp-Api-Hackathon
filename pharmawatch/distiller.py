@@ -208,14 +208,16 @@ def distill_shopping_results(raw_json: dict, filter_known_platforms: bool = True
     return distilled
 
 
-def enrich_direct_merchant_links(distilled_items: List[Dict], max_items: int = 5) -> List[Dict]:
+def enrich_direct_merchant_links(distilled_items: List[Dict], max_items: Optional[int] = None) -> List[Dict]:
     """
     On-demand enrichment: Resolve exact 'Visit site' blue button URLs (1mg.com/drugs/..., apollopharmacy.in/medicine/...)
-    using page_token for top N items.
+    using page_token.
     """
     from .search import get_direct_merchant_link
 
-    for item in distilled_items[:max_items]:
+    target_items = distilled_items if max_items is None else distilled_items[:max_items]
+
+    for item in target_items:
         token = item.get("page_token")
         platform = item.get("platform")
         if token:
@@ -226,6 +228,7 @@ def enrich_direct_merchant_links(distilled_items: List[Dict], max_items: int = 5
                 item["link"] = sanitized
 
     return distilled_items
+
 
 
 

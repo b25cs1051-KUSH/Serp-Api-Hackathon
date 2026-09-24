@@ -42,8 +42,9 @@ def main():
         distilled = distill_shopping_results(raw_result, filter_known_platforms=filter_known)
 
         if distilled:
-            print(f"Resolving exact 'Visit Site' merchant URLs for top items...")
-            distilled = enrich_direct_merchant_links(distilled, max_items=3)
+            print(f"Resolving exact 'Visit Site' merchant URLs for all items...")
+            distilled = enrich_direct_merchant_links(distilled)
+
 
         print("\n" + "=" * 70)
         print(f" DISTILLED PHARMA RESULTS ({len(distilled)} items extracted):")
