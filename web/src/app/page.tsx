@@ -1,8 +1,9 @@
 "use client";
 
-import { Coins, Link2, Loader2, MapPin, Repeat, Search } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Coins, Cpu, Link2, Loader2, MapPin, Repeat, Search, ShoppingBag } from "lucide-react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Alternatives from "@/components/Alternatives";
+import AnswerCard from "@/components/AnswerCard";
 import CacheExplorer from "@/components/CacheExplorer";
 import CacheFlow from "@/components/CacheFlow";
 import CacheLab from "@/components/CacheLab";
@@ -14,6 +15,48 @@ import { useSearch } from "@/lib/useSearch";
 
 const EXAMPLES = ["Stamlo 5", "Dolo 650", "Glyciphage SR 500", "Atorvastatin 10mg", "Pan-D"];
 
+/** "shop": the product as a user sees it. "engine": the same search with every SerpApi call, cache decision and credit shown. */
+type View = "shop" | "engine";
+const VIEW_KEY = "pharmawatch-view";
+
+const VIEW_EVENT = "pharmawatch-view-change";
+let sessionView: View | null = null; // used when storage is blocked
+
+/** ?view=engine in the URL wins (a link for judges), then the last choice in this browser. */
+function readView(): View {
+  const fromUrl = new URLSearchParams(window.location.search).get("view");
+  if (fromUrl === "engine" || fromUrl === "shop") return fromUrl;
+  if (sessionView) return sessionView;
+  try {
+    return localStorage.getItem(VIEW_KEY) === "engine" ? "engine" : "shop";
+  } catch {
+    return "shop";
+  }
+}
+
+function subscribeView(onChange: () => void) {
+  window.addEventListener(VIEW_EVENT, onChange);
+  window.addEventListener("popstate", onChange);
+  return () => {
+    window.removeEventListener(VIEW_EVENT, onChange);
+    window.removeEventListener("popstate", onChange);
+  };
+}
+
+function setView(v: View) {
+  sessionView = v;
+  try {
+    localStorage.setItem(VIEW_KEY, v);
+  } catch {
+    /* storage blocked: the choice lasts for this visit */
+  }
+  const url = new URL(window.location.href);
+  if (v === "engine") url.searchParams.set("view", "engine");
+  else url.searchParams.delete("view");
+  window.history.replaceState(null, "", url);
+  window.dispatchEvent(new Event(VIEW_EVENT));
+}
+
 export default function Home() {
   const [health, setHealth] = useState<Health | null>(null);
   const [healthErr, setHealthErr] = useState(false);
@@ -24,6 +67,9 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [pincode, setPincode] = useState("110001");
   const [links, setLinks] = useState(true);
+  // The server render can't see the URL or storage, so it renders "shop"; the browser then reads the real view.
+  const view = useSyncExternalStore(subscribeView, readView, () => "shop" as View);
+  const engine = view === "engine";
 
   const refresh = useCallback(() => {
     getJSON<Stats>("/api/stats").then(setStats).catch(() => {});
@@ -71,10 +117,14 @@ export default function Home() {
           <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-hit to-sem text-sm font-black text-bg">P</div>
           <div>
             <div className="font-semibold leading-tight">PharmaWatch</div>
-            <div className="text-[11px] text-faint">SerpApi · Redis semantic cache · Gemini</div>
+            <div className="text-[11px] text-faint">{engine ? "SerpApi · Redis semantic cache · Gemini" : "Medicine prices, delivered"}</div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <ViewToggle view={view} onChange={setView} />
+      </header>
+
+      {engine && (
+        <div className="-mt-1 flex flex-wrap justify-end gap-2">
           {healthErr ? (
             <Pill ok={false}>API offline: start uvicorn on :8000</Pill>
           ) : (
@@ -92,7 +142,7 @@ export default function Home() {
             </>
           )}
         </div>
-      </header>
+      )}
 
       {/* Hero + search */}
       <section className="pt-8 pb-8">
@@ -100,8 +150,9 @@ export default function Home() {
           The real price of your medicine, <span className="bg-gradient-to-r from-hit to-sem bg-clip-text text-transparent">delivered to your PIN</span>.
         </h1>
         <p className="mt-3 max-w-2xl text-sm text-muted">
-          Compares 1mg, PharmEasy, Netmeds, Apollo and Medplus including delivery fees, suggests only verified same-composition generics,
-          and never pays SerpApi twice for the same question.
+          {engine
+            ? "Compares 1mg, PharmEasy, Netmeds, Apollo and Medplus including delivery fees, suggests only verified same-composition generics, and never pays SerpApi twice for the same question."
+            : "Compare 1mg, PharmEasy, Apollo, Medplus and more with delivery to your PIN included, and see cheaper brands with the same salt."}
         </p>
 
         <form
@@ -146,15 +197,32 @@ export default function Home() {
               {e}
             </button>
           ))}
-          <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-muted" title="Resolves each top listing's own pharmacy product page: 1 SerpApi call per link the first time, then cached.">
-            <input type="checkbox" checked={links} onChange={(e) => setLinks(e.target.checked)} className="accent-[#34d399]" />
-            <Link2 className="h-3.5 w-3.5" /> resolve direct pharmacy links
-          </label>
+          {engine && (
+            <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-muted" title="Resolves each top listing's own pharmacy product page: 1 SerpApi call per link the first time, then cached.">
+              <input type="checkbox" checked={links} onChange={(e) => setLinks(e.target.checked)} className="accent-[#34d399]" />
+              <Link2 className="h-3.5 w-3.5" /> resolve direct pharmacy links
+            </label>
+          )}
         </div>
       </section>
 
       {/* Results + under the hood */}
-      {state.status !== "idle" && (
+      {state.status !== "idle" && !engine && (
+        <section className="space-y-5">
+          {state.error && <div className="card border-bad/40 p-4 text-sm text-bad">{state.error}</div>}
+          {!(state.status === "error" && state.listings === null) && (
+            <>
+              <AnswerCard query={state.query} listings={state.listings} alternatives={state.alternatives} running={running} />
+              <Results listings={state.listings} query={state.query} pincode={state.pincode} linksResolved={state.linksResolved} wantLinks={state.links} />
+            </>
+          )}
+          <div id="alternatives" className="scroll-mt-4">
+            <Alternatives result={state.alternatives} running={running} />
+          </div>
+        </section>
+      )}
+
+      {state.status !== "idle" && engine && (
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <div className="space-y-5">
             {state.error && <div className="card border-bad/40 p-4 text-sm text-bad">{state.error}</div>}
@@ -177,6 +245,8 @@ export default function Home() {
         </section>
       )}
 
+      {engine && (
+      <>
       {/* Session totals */}
       <section className="mt-16">
         <SectionTitle
@@ -233,10 +303,53 @@ export default function Home() {
         <SectionTitle eyebrow="Redis" title="What is cached right now" sub="Raw SerpApi responses, product-page lookups and Gemini substitute decisions, each with its own TTL." />
         <CacheExplorer data={entries} onRefresh={refresh} />
       </section>
+      </>
+      )}
+
+      {!engine && (
+        <button
+          onClick={() => setView("engine")}
+          className="mt-16 flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-panel-2 px-5 py-4 text-left text-sm text-muted hover:border-sem/40 hover:text-ink"
+        >
+          <span>
+            <span className="font-medium text-ink">Curious how this works?</span> See every live search, cache hit and credit behind these prices.
+          </span>
+          <span className="flex items-center gap-1.5 font-medium text-sem">
+            <Cpu className="h-4 w-4" /> Under the hood
+          </span>
+        </button>
+      )}
 
       <footer className="mt-20 border-t border-line pt-6 text-xs text-faint">
         PharmaWatch · prices from Google Shopping via SerpApi · delivery rules per platform and PIN zone · generics limited to compositions.md. Not medical advice.
       </footer>
     </main>
+  );
+}
+
+function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => void }) {
+  const options: { id: View; label: string; icon: typeof Cpu }[] = [
+    { id: "shop", label: "Shop", icon: ShoppingBag },
+    { id: "engine", label: "Under the hood", icon: Cpu },
+  ];
+  return (
+    <div role="group" aria-label="View" className="flex rounded-xl border border-line bg-panel-2 p-1">
+      {options.map(({ id, label, icon: Icon }) => {
+        const active = view === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(id)}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-hit ${
+              active ? (id === "shop" ? "bg-hit text-bg" : "bg-sem text-bg") : "text-muted hover:text-ink"
+            }`}
+          >
+            <Icon className="h-4 w-4" /> {label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
