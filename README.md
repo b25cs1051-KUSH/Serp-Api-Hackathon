@@ -239,14 +239,41 @@ for one of its substitutes reuses that substitute's cached listings.
 
 ## Setup
 
+### Quickstart with Docker (one command)
+
+Requirements: Docker. Put your keys in `.env` in the repo root (git-ignored):
+
+```bash
+SERP_API_KEY=...
+GEMINI_API_KEY=...
+```
+
+Then:
+
+```bash
+docker compose up --build
+```
+
+Open http://localhost:3000. The API is on http://localhost:8000.
+
+- Three containers: Redis (append-only file, data kept in a volume), the API and the UI. Each has a
+  healthcheck, and the UI starts once the API is healthy.
+- The embedding model is downloaded during the build, so the first search doesn't wait for it.
+- Keys are read from `.env` when the containers start and are never copied into an image
+  (`.dockerignore` excludes `.env`). Both app containers run as non-root users.
+- The first build downloads about 1 GB (CPU-only PyTorch) and takes a few minutes. The API image is
+  about 2.2 GB and the UI image about 330 MB.
+
+### Local development
+
 Requirements: Python 3.10+, Docker (for Redis), Node 20+ (for the web UI).
 
 ```bash
-# 1. Redis (data persists in a Docker volume)
-docker compose up -d
+# 1. Redis only (data persists in a Docker volume)
+docker compose up -d redis
 
 # 2. Python dependencies
-pip install -r requirements.txt -r api/requirements.txt
+pip install -r requirements.txt
 
 # 3. Keys: .env in the repo root (git-ignored)
 SERP_API_KEY=...
@@ -254,6 +281,7 @@ GEMINI_API_KEY=...
 # optional: GEMINI_MODEL=gemini-2.5-flash,gemini-2.5-flash-lite
 # optional: MAX_CONCURRENT_SEARCHES=4  SEARCH_TIMEOUT_S=90  SERPAPI_TIMEOUT=30
 # optional: UI_ORIGINS=http://localhost:3000   (CORS)
+# optional: REDIS_HOST=localhost  REDIS_PORT=6379
 
 # 4. API
 uvicorn api.main:app --port 8000
@@ -343,7 +371,7 @@ Design choices:
 ```
 
 The server reads `.env` from the repo root, whatever directory the client starts it in. Redis must be
-running (`docker compose up -d`).
+running (`docker compose up -d redis`, or the full stack).
 
 **MCP Inspector:**
 
@@ -425,7 +453,7 @@ api/                    FastAPI layer (SSE search, health, cache lab)
 mcp_server.py           MCP server (stdio): the same search and cache lab as tools
 web/                    Next.js UI
 scripts/                offline tests, live replay, threshold tuning
-docker-compose.yml      Redis with append-only persistence
+docker-compose.yml      Redis + API + UI, with healthchecks (api/Dockerfile, web/Dockerfile)
 ```
 
 ---

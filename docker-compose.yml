@@ -1,3 +1,6 @@
+# Everything:          docker compose up --build      → UI http://localhost:3000, API http://localhost:8000
+# Redis only (dev):    docker compose up -d redis
+# Keys come from .env at runtime (SERP_API_KEY, GEMINI_API_KEY); they are never baked into an image.
 services:
   redis:
     image: redis:7-alpine
@@ -6,6 +9,38 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    env_file: .env
+    environment:
+      REDIS_HOST: redis
+      UI_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000   # the browser calls the API on the host port
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   redis_data:

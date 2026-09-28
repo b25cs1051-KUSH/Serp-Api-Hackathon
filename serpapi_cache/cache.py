@@ -125,7 +125,7 @@ class SerpApiCache:
 
     Args:
         api_key              : SerpApi API key (or set SERP_API_KEY in .env)
-        backend              : RedisBackend instance (auto-connects to localhost:6379 if not passed)
+        backend              : RedisBackend instance (default: REDIS_HOST/REDIS_PORT env, else localhost:6379)
         similarity_threshold : Cosine similarity cutoff for a cache hit (0–1)
         default_ttl          : Seconds before a cached entry expires (0 = never)
         embedding_model      : Sentence-Transformers model name
@@ -168,14 +168,15 @@ class SerpApiCache:
             # Caller passed an explicit backend — use it, let errors propagate
             self.backend: Optional[BaseBackend] = backend
         else:
+            host, port = os.getenv("REDIS_HOST", "localhost"), int(os.getenv("REDIS_PORT", "6379"))
             try:
-                self.backend = RedisBackend(host="localhost", port=6379)
+                self.backend = RedisBackend(host=host, port=port)
             except Exception as e:
                 import warnings
                 warnings.warn(
-                    f"\n⚠️  Redis not reachable (localhost:6379): {e}\n"
+                    f"\n⚠️  Redis not reachable ({host}:{port}): {e}\n"
                     "   Running in PASSTHROUGH mode — all searches go directly to SerpApi.\n"
-                    "   Start Redis: docker compose up -d",
+                    "   Start Redis: docker compose up -d redis",
                     stacklevel=2,
                 )
                 self.backend = None

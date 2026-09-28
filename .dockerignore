@@ -1,0 +1,12 @@
+# Build context for api/Dockerfile (repo root). Secrets and local state never enter an image.
+.env
+.env.*
+.git
+.claude
+**/__pycache__
+*.egg-info
+*.log
+web
+scripts
+notes/*
+!notes/postal_codes_delivery_rules.json
