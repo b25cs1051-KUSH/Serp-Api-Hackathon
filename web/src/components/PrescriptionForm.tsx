@@ -44,7 +44,8 @@ export default function PrescriptionForm({
     if (!text.includes("\n")) return;
     e.preventDefault();
     const parsed = text.split(/\r?\n/).map(parseLine).filter((x): x is RxItem => x !== null);
-    const next = [...items.slice(0, i), ...parsed, ...items.slice(i + 1)].filter((it) => it.q.trim()).slice(0, MAX_LINES);
+    // A pasted list replaces this row and everything after it (never duplicates rows already there).
+    const next = [...items.slice(0, i), ...parsed].filter((it) => it.q.trim()).slice(0, MAX_LINES);
     setItems(next.length ? next : [{ q: "", tablets: null }]);
   };
 
