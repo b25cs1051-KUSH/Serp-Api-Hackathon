@@ -328,7 +328,7 @@ def _prune_call_log(cache) -> None:
 def _search_events(handle: dict) -> Iterator[tuple[str, object]]:
     """
     One running search as (event, data) pairs — exactly the SSE events:
-      start, call, main | main_update | main_links, alternatives, error {message, code}, done
+      start, call, choose, main | main_update | main_links, alternatives, error {message, code}, done
     Yields ("__tick__", None) while waiting so the SSE layer can send keep-alives.
     Calls made by another search running at the same time can also appear (shared cache log).
     """
@@ -402,6 +402,8 @@ def _search_events(handle: dict) -> Iterator[tuple[str, object]]:
             timings[f"{name}_ms"] = elapsed
             if name == "alternatives":
                 yield name, {"at_ms": elapsed, "result": _clean_alternatives(payload)}
+            elif name == "choose":
+                yield name, {"at_ms": elapsed, **payload}
             else:
                 yield name, {"at_ms": elapsed, "listings": _clean_rows(payload)}
 
@@ -456,7 +458,10 @@ def search_stream(
       start        {query, pincode, links, llm}
       call         one SerpApi request: n, tag, engine, query, kind, similarity, start_ms, ms, credit
       main | main_update | main_links   {at_ms, listings} — ranked listings of the searched medicine
-      alternatives {at_ms, result} — generic substitutes + savings (result null when not in compositions.md)
+      choose       {at_ms, query, reason, options: [{label, query}]} — the search needs a strength first
+                   ('paracetamol'); nothing else follows and no credit is spent
+      alternatives {at_ms, result} — same-composition brands + savings (result null when the medicine
+                   isn't in the medicine index)
       error        {message, code}: invalid_query | invalid_pincode | busy | timeout | pipeline_error
       done         per-search summary: calls, credits spent/saved, total_ms, timings
     A refused search (bad input, busy) still answers 200 with error + done, because EventSource
@@ -481,7 +486,8 @@ def search_json(
 ):
     """
     The same search as one JSON response, once every stage is done:
-      {query, pincode, listings (final main list), alternatives, stages [{name, at_ms}],
+      {query, pincode, listings (final main list), alternatives, choose (options when the search
+       needs a strength, else null), stages [{name, at_ms}],
        calls [...], summary (the stream's done payload), error}
     422 invalid input · 429 too many searches · 504 deadline passed · 502 pipeline error
     (504/502 still carry whatever was found before the failure).
@@ -506,7 +512,7 @@ def collect_search(q: str, pincode: str, links: bool, llm: bool, on_event=None) 
     query, pin = _validate(q, pincode)
     handle = _start_search(query, pin, links, llm)
 
-    result = {"query": query, "pincode": pin, "listings": None, "alternatives": None,
+    result = {"query": query, "pincode": pin, "listings": None, "alternatives": None, "choose": None,
               "stages": [], "calls": [], "summary": None, "error": None}
     for name, data in _search_events(handle):
         if name == "__tick__":
@@ -518,6 +524,9 @@ def collect_search(q: str, pincode: str, links: bool, llm: bool, on_event=None) 
             result["stages"].append({"name": name, "at_ms": data["at_ms"]})
         elif name == "alternatives":
             result["alternatives"] = data["result"]
+            result["stages"].append({"name": name, "at_ms": data["at_ms"]})
+        elif name == "choose":
+            result["choose"] = {k: v for k, v in data.items() if k != "at_ms"}
             result["stages"].append({"name": name, "at_ms": data["at_ms"]})
         elif name == "call":
             result["calls"].append(data)

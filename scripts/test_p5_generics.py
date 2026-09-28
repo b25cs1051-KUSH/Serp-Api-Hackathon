@@ -20,17 +20,17 @@ from pharmawatch.comparator import rank_by_landed_price
 from pharmawatch.search import pick_store_link
 from pharmawatch.generics import (
     _prepare,
-    _tokens,
     compare_to_reference,
     estimate_pack_size,
     find_composition,
-    load_compositions,
+    group_matcher,
     parse_pack_size,
+    pick_candidates,
     THIN_RESULT_TTL,
     thin_result_ttl,
     title_matches_brand,
-    validate_decision,
 )
+from pharmawatch.medicines import resolve, same_composition
 from serpapi_cache import SerpApiCache
 from serpapi_cache.backends import BaseBackend
 from serpapi_cache.cache import _params_signature
@@ -184,7 +184,7 @@ def check_async_store() -> list:
 
 
 def check_parallel_pipeline() -> list:
-    """Main + Gemini start together; the 3 substitutes start as Gemini answers and run side by side."""
+    """Main search first; the 3 substitute searches start as soon as it lands and run side by side."""
     started = {}
     t0 = time.perf_counter()
 
@@ -194,23 +194,22 @@ def check_parallel_pipeline() -> list:
         return [{"platform": "1mg", "medicine_name": f"{name} Strip Of 10 Tablets", "price_inr": 50.0,
                  "delivery_status": "free", "total_landed_cost": 50.0}]
 
-    def fake_match(query, use_llm):
-        time.sleep(0.2)
-        return find_composition("Dolo 650", use_llm=False)
-
-    real = pipeline.ranked_listings, pipeline.find_composition
-    pipeline.ranked_listings, pipeline.find_composition = fake_ranked, fake_match
+    real = pipeline.ranked_listings
+    pipeline.ranked_listings = fake_ranked
     try:
         events = []
-        for kind, _ in pipeline.search_medicine_stream("Dolo 650", "110001", resolve_links=False):
+        for kind, payload in pipeline.search_medicine_stream("Dolo 650", "110001", resolve_links=False, use_llm=False):
             events.append((kind, round(time.perf_counter() - t0, 1)))
+            if kind == "alternatives":
+                searched = payload["suggested_alternatives"]
     finally:
-        pipeline.ranked_listings, pipeline.find_composition = real
-    alt_starts = [started[b] for b in ("Calpol 650", "Crocin 650", "Pacimol 650")]
+        pipeline.ranked_listings = real
+    alt_starts = [started[b] for b in searched]
     return [
         check("Main streamed first (~0.4s)", events[0], ("main", 0.4)),
-        check("Substitutes start right after Gemini", all(0.15 < s < 0.35 for s in alt_starts), True),
-        check("All done in ~0.6s, not 0.4+0.2+3×0.4", events[-1], ("alternatives", 0.6)),
+        check("One same-salt search", searched, ["Paracetamol 650mg"]),
+        check("Substitutes start right after main", all(0.35 < s < 0.55 for s in alt_starts), True),
+        check("All done in ~0.8s", events[-1], ("alternatives", 0.8)),
         check("Event order (links off)", [k for k, _ in events], ["main", "alternatives"]),
     ]
 
@@ -245,23 +244,27 @@ def check_stamlo_pipeline() -> list:
                 raise RuntimeError("SerpApi error")
             return rank_by_landed_price([dict(r) for r in searches.get(name, searches["Stamlo 5"])], pin)
 
-        def fake_match(q, use_llm):
-            time.sleep(0.1)
+        def fake_match(q, use_llm, resolution=None):
             return find_composition("Stamlo 5", use_llm=False) if in_catalogue else None
+
+        def fake_pick(match, found, n=3):
+            return ["Amlokind 5", "Amtas 5", "Amlopres 5"]
 
         def fake_link(token, target_platform=None, verbose=False):
             requested.append(token)
             time.sleep(1.0 if "stamlo" in token else 0.3)   # main links slower than the alternative's
             return f"https://{target_platform}/{token}"
 
-        real = pipeline.ranked_listings, pipeline.find_composition, pipeline.get_direct_merchant_link
-        pipeline.ranked_listings, pipeline.find_composition, pipeline.get_direct_merchant_link = fake_ranked, fake_match, fake_link
+        real = pipeline.ranked_listings, pipeline.find_composition, pipeline.get_direct_merchant_link, pipeline.pick_candidates
+        (pipeline.ranked_listings, pipeline.find_composition, pipeline.get_direct_merchant_link,
+         pipeline.pick_candidates) = fake_ranked, fake_match, fake_link, fake_pick
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 return list(pipeline.search_medicine_stream(query, "110001"))
         finally:
-            pipeline.ranked_listings, pipeline.find_composition, pipeline.get_direct_merchant_link = real
+            (pipeline.ranked_listings, pipeline.find_composition, pipeline.get_direct_merchant_link,
+             pipeline.pick_candidates) = real
 
     events = run("Stamlo 5")
     got = dict(events)
@@ -272,12 +275,13 @@ def check_stamlo_pipeline() -> list:
     main_links = {r["medicine_name"]: r["direct_link"] for r in got["main_links"]}
     link_calls = sorted(requested)
 
-    typo = dict(run("Stamloo 5"))                       # user's words match no title; Gemini's name does
-    outside = run("Stamlo 5", in_catalogue=False)       # not in compositions.md
+    typo = dict(run("Stamloo 5"))                       # spelling corrected from the medicine index
+    outside = run("Stamlo 5", in_catalogue=False)       # not in the medicine index
     failed = dict(run("Stamlo 5", failing="Amtas 5"))   # one substitute search errors
     return [
-        check("Typo: first main list empty", typo["main"], []),
-        check("Typo: filled once catalogue name known", titles(typo["main_update"]),
+        check("Typo: main list uses the corrected name at once", titles(typo["main"]),
+              ["Stamlo 5MG Tablet", "Stamlo-5 Tablet 30's"]),
+        check("Typo: pooled like any search", titles(typo["main_update"]),
               ["Stamlo 5MG Tablet", "Stamlo-5 Tablet 30's", "Stamlo 5Mg Strip Of 30 Tablets"]),
         check("Not in catalogue: main + links still sent, alternatives None",
               [(k, v is None) for k, v in outside], [("main", False), ("alternatives", True), ("main_links", False)]),
@@ -306,11 +310,15 @@ def check_stamlo_pipeline() -> list:
 
 
 def run_checks() -> bool:
-    def brand_of(q):
-        m = find_composition(q, use_llm=False)
-        return m and (m["matched_brand"] or f"salt:{m['entry']['name']}")
+    def what(q):
+        r = resolve(q)
+        return (r["kind"], r.get("brand") or r.get("label")) if r["kind"] in ("brand", "salt") else (r["kind"], None)
 
-    entries = load_compositions()
+    def group_brands(q):
+        return {g["brand"].lower() for g in same_composition(resolve(q)["comp_key"])}
+
+    def options(q):
+        return [o["query"] for o in resolve(q).get("options", [])][:3]
     def listing(title, price, status="charged", landed=None):
         return {"medicine_name": title, "price_inr": price, "delivery_status": status,
                 "total_landed_cost": landed if landed is not None else price, "platform": "x"}
@@ -324,42 +332,45 @@ def run_checks() -> bool:
         listing("Stamlo 5MG Tablet", 66.02, status="free"),
     ]
 
-    def alts(decision, query=""):
-        m = validate_decision(decision, query)
-        return m and m["alternatives"]
-    brand_keys = Counter(frozenset(_tokens(b)) for e in entries for b in e["brands"])
+    gliclazide = group_brands("Gliclazide 80mg")
+    sitagliptin = group_brands("Sitagliptin 50mg")
+    sita_match = group_matcher(find_composition("Sitagliptin 50mg", use_llm=False))
     results = [
-        check("Entries parsed", len(entries) > 70, True),
-        check("Every entry has brands", all(e["brands"] for e in entries), True),
-        check("No two brands share a key", [k for k, n in brand_keys.items() if n > 1], []),
-        # Query → composition
-        check("Brand match", brand_of("Dolo 650"), "Dolo 650"),
-        check("Hyphen / mg / tablet ignored", brand_of("dolo-650mg tablet"), "Dolo 650"),
-        check("Word order ignored", brand_of("Glyciphage 500 SR"), "Glyciphage SR 500"),
-        check("IR brand ≠ SR brand", brand_of("Glyciphage 500"), "Glyciphage 500"),
-        check("Brand without strength", brand_of("Pan-D"), "Pan-D"),
-        check("Salt heading", brand_of("Paracetamol 650mg"), "salt:Paracetamol 650mg (Immediate Release)"),
-        check("Salt with EC dropped", brand_of("Aspirin 75mg"), "salt:Aspirin 75mg EC (Enteric Coated / Gastro-Resistant)"),
-        check("Unknown medicine", brand_of("Dolo 250 Suspension"), None),
-        check("Exact fallback gives 3 others", find_composition("Dolo 650", use_llm=False)["alternatives"],
-              ["Calpol 650", "Crocin 650", "Pacimol 650"]),
-        # Gemini answers are only trusted inside compositions.md
-        check("Gemini alternatives kept", alts({"searched_brand": "dolo-650", "alternatives": ["Crocin 650", "calpol 650"]}),
-              ["Crocin 650", "Calpol 650"]),
-        check("Salt search (no searched brand)", alts({"searched_brand": None, "alternatives": ["Dolo 650", "Pacimol 650"]}),
-              ["Dolo 650", "Pacimol 650"]),
-        check("Searched brand never its own alternative",
-              alts({"searched_brand": "Dolo 650", "alternatives": ["Dolo 650", "Crocin 650"]}), ["Crocin 650"]),
-        check("Other entry's brand dropped",
-              alts({"searched_brand": "Dolo 650", "alternatives": ["Dolo 500", "Pan-D", "Crocin 650"]}), ["Crocin 650"]),
-        check("Brand not in file dropped",
-              alts({"searched_brand": "Dolo 650", "alternatives": ["Paracip 650", "Calpol 650"]}), ["Calpol 650"]),
-        check("Capped at 3", len(alts({"searched_brand": None, "alternatives": ["Dolo 650", "Calpol 650", "Crocin 650", "Pacimol 650"]})), 3),
-        check("No valid alternatives → None", validate_decision({"searched_brand": "Dolo 650", "alternatives": []}), None),
-        check("Extra variant suffix rejected",
-              validate_decision({"searched_brand": "Telma 40", "alternatives": ["Telma 40", "Tazloc 40"]}, "telma 40 h"), None),
-        check("Listed variant suffix allowed",
-              alts({"searched_brand": "Pan-D", "alternatives": ["Pantocid DSR"]}, "pan d cap"), ["Pantocid DSR"]),
+        # What the search names (medicine index built from the Indian Medicine Dataset)
+        check("Brand", what("Stamlo 5"), ("brand", "Stamlo 5")),
+        check("Hyphen / mg / tablet ignored", what("dolo-650mg tablet"), ("brand", "Dolo 650")),
+        check("SR brand", what("Glyciphage SR 500"), ("brand", "Glyciphage SR 500mg")),
+        check("Brand without strength", what("Pan-D"), ("brand", "Pan-D")),
+        check("Salt + strength", what("Gliclazide 80mg"), ("salt", "Gliclazide 80mg tablet")),
+        check("Salt + strength + SR", what("Metformin 500mg SR"), ("salt", "Metformin 500mg tablet SR")),
+        check("Salt without strength asks", (resolve("paracetamol")["kind"], options("paracetamol")),
+              ("ambiguous", ["Paracetamol 650mg", "Paracetamol 500mg", "Paracetamol 1000mg"])),
+        check("Brand without strength asks", resolve("Dolo")["kind"], "ambiguous"),
+        check("Spelling corrected", (what("dollo 650"), resolve("dollo 650")["matched_by"]), (("brand", "Dolo 650"), "fuzzy")),
+        check("Telma 40 H is Telma-H (HCTZ), never Telma-AM H", what("Telma 40 H"), ("brand", "Telma H")),
+        check("Unknown medicine", resolve("xyzqq 10")["kind"], "none"),
+        # Same-composition groups: combinations are other medicines
+        check("Gliclazide 80: Glizid 80 in, Glizid-M / Reclimet out",
+              ("glizid 80" in gliclazide, any(b.startswith("glizid-m") or b.startswith("reclimet") for b in gliclazide)), (True, False)),
+        check("Sitagliptin 50: Januvia in, Istamet (+metformin) out",
+              ("januvia 50mg" in sitagliptin, any(b.startswith("istamet") for b in sitagliptin)), (True, False)),
+        check("IR and SR are different groups", resolve("Metformin 500mg")["comp_key"] != resolve("Metformin 500mg SR")["comp_key"], True),
+        check("Group sorted by list price per unit",
+              [g["unit_mrp"] for g in same_composition(resolve("Dolo 650")["comp_key"]) if g["unit_mrp"] is not None][:5]
+              == sorted(g["unit_mrp"] for g in same_composition(resolve("Dolo 650")["comp_key"]) if g["unit_mrp"] is not None)[:5], True),
+        # Titles from the real Sitagliptin 50mg search
+        check("Setalin 50 (sertraline) is not sitagliptin", sita_match("Setalin 50MG Tab"), None),
+        check("Sitacip M 50/500 rejected", sita_match("Cipla Sitacip M 50/500mg Tablets 10s"), None),
+        check("Istamet 50/500 rejected", sita_match("Istamet 50mg/500mg Tablet"), None),
+        check("Januvia 50 accepted", (sita_match("Januvia 50mg Tablet") or {}).get("brand"), "Januvia 50mg"),
+        check("Sitabite 50 accepted (nobody searched it)", (sita_match("Sitabite 50 mg Tablet 10's") or {}).get("brand"), "Sitabite 50mg"),
+        # Substitute searches
+        check("Brand search adds one search by salt", pick_candidates(find_composition("Stamlo 5", use_llm=False), []),
+              ["Amlodipine 5mg"]),
+        check("SR brand's salt search keeps SR", pick_candidates(find_composition("Glyciphage SR 500", use_llm=False), []),
+              ["Metformin 500mg SR"]),
+        check("Salt search adds the widest-range maker's brand",
+              pick_candidates(find_composition("Sitagliptin 50mg", use_llm=False), []), ["Istavel 50mg"]),
         # Title filter (titles taken from cached shopping results)
         check("Exact brand title", title_matches_brand("Dolo 650mg Strip Of 15 Tablets", "Dolo 650"), True),
         check("Dolo-650 hyphen title", title_matches_brand("Dolo-650 Tablet 15's", "Dolo 650"), True),
@@ -370,8 +381,8 @@ def run_checks() -> bool:
         check("Pan D matches Pan-D", title_matches_brand("Pan D Capsule (30mg/40mg) (15caps)", "Pan-D"), True),
         check("SR ≠ IR brand", title_matches_brand("Glyciphage SR 500 Tablet", "Glyciphage 500"), False),
         # Fix 2 — look-alike combinations (titles from the Stamlo 5 live run)
-        check("Every catalogue brand matches its own name",
-              [b for e in entries for b in e["brands"] if not title_matches_brand(f"{b} Tablet 15's", b)], []),
+        check("Every Gliclazide 80 brand matches its own name",
+              [b for b in gliclazide if not title_matches_brand(f"{b} Tablet 15's", b)], []),
         check("Amlokind-AT ≠ Amlokind 5", title_matches_brand("Amlokind-AT 5 mg/50 mg Tablet 15's", "Amlokind 5"), False),
         check("Amlokind At 5/50 ≠ Amlokind 5", title_matches_brand("Amlokind At 5/50Mg Strip Of 15 Tablets", "Amlokind 5"), False),
         check("Stamlo Bis ≠ Stamlo 5", title_matches_brand("Stamlo Bis 5 Tablet 10", "Stamlo 5"), False),
@@ -458,7 +469,7 @@ def run_llm(queries):
     for q in queries:
         m = find_composition(q)
         if m is None:
-            print(f"  {q!r:<32} → not in compositions.md")
+            print(f"  {q!r:<32} → not in the medicine index")
         else:
             print(f"  {q!r:<34} searched={m['matched_brand'] or '(generic name)'} → {m['alternatives']}"
                   f"  [{m['matched_by']}: {m['reason']}]")
@@ -540,7 +551,7 @@ def print_call_log(log, t0):
 
 def print_alternatives(query: str, res):
     if res is None:
-        print(f"\n'{query}' is not in compositions.md — no generic alternatives.")
+        print(f"\n'{query}' is not in the medicine index — no generic alternatives.")
         return
     print(f"\nTimings: {res['timings']}")
     c = res["composition"]

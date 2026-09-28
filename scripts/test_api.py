@@ -124,6 +124,21 @@ def run_checks() -> bool:
             check("json: calls + summary", (len(j["calls"]), j["summary"]["credits_spent"], j["error"]), (3, 1, None)),
         ]
 
+        # ── a search that needs a strength: options, then done, nothing spent ──
+        def choose_stub(query, pincode, resolve_links=True, use_llm=True, verbose=False):
+            yield "choose", {"query": query, "reason": "strength not given",
+                             "options": [{"label": "Paracetamol 650mg tablet", "query": "Paracetamol 650mg", "comp_key": "k"}]}
+        api.search_medicine_stream = choose_stub
+        events = parse_sse(client.get("/api/search/stream", params={"q": "paracetamol", "pincode": "110001"}).text)
+        choose = dict(events).get("choose", {})
+        j = client.get("/api/search", params={"q": "paracetamol", "pincode": "110001"}).json()
+        results += [
+            check("choose: event order", [n for n, _ in events if n != "call"], ["start", "choose", "done"]),
+            check("choose: options sent", [o["query"] for o in choose.get("options", [])], ["Paracetamol 650mg"]),
+            check("choose: no credit", dict(events)["done"]["credits_spent"], 0),
+            check("json: choose field", (j["choose"]["options"][0]["query"], j["listings"]), ("Paracetamol 650mg", None)),
+        ]
+
         # ── bad input is refused before anything runs (0 credits) ─────────
         before = len(calls_made)
         bad_pin = parse_sse(client.get("/api/search/stream", params={"q": "Stamlo 5", "pincode": "01234"}).text)
