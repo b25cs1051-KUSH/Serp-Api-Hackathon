@@ -105,6 +105,9 @@ On top of that:
 - **Same params only.** A semantic hit is only served from an entry fetched with the same other params
   (page, filters, language, `json_restrictor`), checked by a stored hash of those params. The embedding
   only sees the query text, so without this "Dolo 650, page 2" could get page 1's results.
+- **Thin results expire in 1 h.** Google sometimes answers "Stamlo 5 price" with other brands only. A
+  main search that finds fewer than 3 real listings of the medicine is cached for 1 h instead of 24 h
+  (`ttl_for` in `SerpApiCache.search`), so a bad response doesn't stick for a day.
 - **`exact_only=True`** skips step 2. Catalogue brand names are always searched this way (see
   [problem 1](#1-a-semantic-cache-cant-tell-two-brands-apart)).
 - **Background writes.** A search that calls SerpApi returns immediately; the Redis write happens on a

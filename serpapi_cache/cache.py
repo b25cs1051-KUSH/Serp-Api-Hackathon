@@ -28,7 +28,7 @@ import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from contextlib import contextmanager
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from .backends import BaseBackend, RedisBackend, say
 
@@ -200,7 +200,8 @@ class SerpApiCache:
     # Public API
     # ─────────────────────────────────────────────
 
-    def search(self, params: dict, ttl: Optional[int] = None, exact_only: bool = False) -> dict:
+    def search(self, params: dict, ttl: Optional[int] = None, exact_only: bool = False,
+               ttl_for: Optional[Callable[[dict], Optional[int]]] = None) -> dict:
         """
         Drop-in replacement for serpapi.Client.search().
         Returns cached result if a semantically similar query exists
@@ -210,13 +211,17 @@ class SerpApiCache:
         can hit. Use it for exact product names — 'Calpol 650' must never be served
         'Dolo 650'. The result is still stored with its embedding for later reuse.
 
+        ttl_for(result) can shorten how long a fresh API result is kept: it returns a TTL in
+        seconds, or None for the normal one. Use it for results that look wrong (e.g. a search
+        that returned none of the product asked for), so a bad response doesn't stick for a day.
+
         If Redis is unavailable (backend is None), skips cache entirely
         and calls SerpApi directly — passthrough mode.
 
         Every call is recorded in the call log (see pop_call_log()).
         """
         started = time.perf_counter()
-        outcome, result = self._search(params, ttl, exact_only)
+        outcome, result = self._search(params, ttl, exact_only, ttl_for)
         entry = {
             "start": started,
             "end": time.perf_counter(),
@@ -236,7 +241,8 @@ class SerpApiCache:
             log, self.call_log = self.call_log, []
         return log
 
-    def _search(self, params: dict, ttl: Optional[int], exact_only: bool) -> tuple[str, dict]:
+    def _search(self, params: dict, ttl: Optional[int], exact_only: bool,
+                ttl_for: Optional[Callable[[dict], Optional[int]]] = None) -> tuple[str, dict]:
         # Passthrough mode — Redis unavailable
         if self.backend is None:
             if self.verbose:
@@ -296,6 +302,16 @@ class SerpApiCache:
 
         # 3. Store result + embedding + query_text — in the background
         effective_ttl = ttl if ttl is not None else self.default_ttl
+        if ttl_for is not None:
+            try:
+                override = ttl_for(result)
+            except Exception as e:  # a failing check never costs the result or the store
+                override = None
+                say(f"⚠️  ttl_for failed for '{query_text[:60]}': {e}")
+            if override is not None:
+                effective_ttl = override
+                if self.verbose:
+                    say(f"⏱️  SHORT TTL {override}s | query='{query_text[:60]}'")
         self._store_async(cache_key, result, embedding, effective_ttl, query_text, is_text_query, params_sig)
 
         return "api_call", result

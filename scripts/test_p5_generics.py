@@ -26,6 +26,8 @@ from pharmawatch.generics import (
     find_composition,
     load_compositions,
     parse_pack_size,
+    THIN_RESULT_TTL,
+    thin_result_ttl,
     title_matches_brand,
     validate_decision,
 )
@@ -112,6 +114,49 @@ def check_params_signature() -> list:
         check("Signature stored with the entry", all(r["params_sig"] for r in backend.get_all()), True),
         check("api_key never changes the signature", _params_signature({**shop, "api_key": "a"}) == _params_signature(shop), True),
         check("Entry without a signature: no semantic reuse", old.search({"engine": "google_shopping", "gl": "in", "q": "Dola 650 price"})["q"], "Dola 650 price"),
+    ]
+
+
+def check_thin_result_ttl() -> list:
+    """A main search that found (almost) none of the medicine is kept 1 h, not 24 h."""
+    backend = DictBackend()
+    stored_ttl = {}
+    real_set = backend.set
+
+    def set_(key, value, embedding, ttl, query_text="", params_sig=""):
+        stored_ttl[query_text.split(" | ")[0]] = ttl
+        real_set(key, value, embedding, ttl, query_text, params_sig)
+    backend.set = set_
+
+    cache = SerpApiCache(api_key="offline", backend=backend, verbose=False)
+    cache._load_model = lambda: None
+    cache._embed = lambda text: [1.0, 0.0]
+
+    def item(title, source="1mg", price="₹66.02"):
+        return {"title": title, "source": source, "price": price, "extracted_price": float(price[1:]),
+                "product_link": "https://www.google.co.in/shopping/product/1"}
+    good = {"shopping_results": [item("Stamlo 5MG Tablet", "Chemist180"), item("Stamlo 5 Tablet"),
+                                 item("Stamlo-5 Tablet 30's", "Apollo247", "₹80.00")]}
+    bad = {"shopping_results": [item("Amlopres 5 mg Tablet"), item("Stamlo Beta Tablet 15's", "Apollo247"),
+                                item("Stamlo D Tab", "MedPlusMart"), item("Stamlo 5MG Tablet", "Chemist180")]}
+    shop = {"engine": "google_shopping", "gl": "in"}
+    ttl_for = thin_result_ttl("Stamlo 5")
+    cache._call_serpapi = lambda params: good
+    cache.search({**shop, "q": "stamlo 5 price"}, ttl=86_400, exact_only=True, ttl_for=ttl_for)
+    cache._call_serpapi = lambda params: bad
+    cache.search({**shop, "q": "stamlo 5 mg price"}, ttl=86_400, exact_only=True, ttl_for=ttl_for)
+    cache._call_serpapi = lambda params: bad
+    cache.search({**shop, "q": "no check price"}, ttl=86_400, exact_only=True)
+
+    def boom(result):
+        raise ValueError("bad check")
+    cache.search({**shop, "q": "broken check price"}, ttl=86_400, exact_only=True, ttl_for=boom)
+    cache.wait_for_writes()
+    return [
+        check("3 real listings: full 24 h TTL", stored_ttl["stamlo 5 price"], 86_400),
+        check("1 real listing among look-alikes: 1 h TTL", stored_ttl["stamlo 5mg price"], THIN_RESULT_TTL),
+        check("No ttl_for: TTL unchanged", stored_ttl["no check price"], 86_400),
+        check("Failing ttl_for: result still cached, normal TTL", stored_ttl["broken check price"], 86_400),
     ]
 
 
@@ -402,6 +447,7 @@ def run_checks() -> bool:
     ]
     results += check_exact_only_cache()
     results += check_params_signature()
+    results += check_thin_result_ttl()
     results += check_async_store()
     results += check_parallel_pipeline()
     results += check_stamlo_pipeline()

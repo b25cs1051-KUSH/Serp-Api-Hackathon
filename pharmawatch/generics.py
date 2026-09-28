@@ -424,10 +424,31 @@ def _sort_key(row: dict):
 # Assembly (searches run in pipeline.py)
 # ─────────────────────────────────────────────
 
+# A main search that finds fewer real listings of the medicine than this is kept for 1 h, not 24 h:
+# Google sometimes answers "Stamlo 5 price" with other brands only, and a day-long cache would pin
+# that. 1 h is also how long SerpApi replays an identical search from its own cache.
+MIN_MAIN_LISTINGS = 3
+THIN_RESULT_TTL = 3600
+
+
+def thin_result_ttl(name: str):
+    """ttl_for callback for the main search: THIN_RESULT_TTL when the result is thin, else None."""
+    def ttl_for(raw: dict):
+        real = [r for r in distill_shopping_results(raw)
+                if title_matches_brand(r.get("medicine_name", ""), name, allows_other_forms(name))]
+        return THIN_RESULT_TTL if len(real) < MIN_MAIN_LISTINGS else None
+    return ttl_for
+
+
 def ranked_listings(name: str, pincode, exact_only: bool = False, verbose: bool = False) -> List[dict]:
-    """search → distill → delivery-inclusive ranking for one medicine name."""
+    """
+    search → distill → delivery-inclusive ranking for one medicine name.
+    The main search (exact_only=False) keeps a thin result for 1 h only; substitute searches
+    (exact_only=True) are often thin for real (brand not sold online) and keep the full TTL.
+    """
     from pharmawatch.search import search_prices
-    raw = search_prices(name, verbose=verbose, exact_only=exact_only)
+    ttl_for = None if exact_only else thin_result_ttl(name)
+    raw = search_prices(name, verbose=verbose, exact_only=exact_only, ttl_for=ttl_for)
     return rank_by_landed_price(distill_shopping_results(raw), pincode)
 
 

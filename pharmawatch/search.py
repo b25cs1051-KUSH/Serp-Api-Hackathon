@@ -66,7 +66,8 @@ def warm_up(verbose: bool = True) -> float:
 # P2.1 — Primary price search via google_shopping
 # ─────────────────────────────────────────────
 
-def search_prices(medicine_name: str, verbose: bool = True, exact_only: bool = False) -> dict:
+def search_prices(medicine_name: str, verbose: bool = True, exact_only: bool = False,
+                  ttl_for=None) -> dict:
     """
     Search for prices of a medicine across Indian pharma platforms.
 
@@ -75,11 +76,12 @@ def search_prices(medicine_name: str, verbose: bool = True, exact_only: bool = F
     TTL     : 86400 (24 hours)
     exact_only : cache hit only on this exact medicine name (no similarity match) —
                  used for brand names from compositions.md
+    ttl_for    : optional result → TTL override (see SerpApiCache.search)
     Returns : Raw SerpApi shopping JSON (pass to distiller.distill_shopping_results)
     """
     cache = _get_cache(verbose=verbose)
     params = {**SHOPPING_PARAMS, "q": f"{medicine_name} price"}
-    return cache.search(params, ttl=_PRICE_TTL, exact_only=exact_only)
+    return cache.search(params, ttl=_PRICE_TTL, exact_only=exact_only, ttl_for=ttl_for)
 
 
 # ─────────────────────────────────────────────
