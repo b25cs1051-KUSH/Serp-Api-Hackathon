@@ -10,9 +10,11 @@ const STAGE_LABEL: Record<string, string> = {
   main_update: "list grew",
   alternatives: "generics shown",
   main_links: "links ready",
+  basket: "basket ready",
+  basket_links: "basket links ready",
 };
 
-export default function UnderTheHood({ state }: { state: SearchState }) {
+export default function UnderTheHood({ state, note }: { state: SearchState; note?: string }) {
   const { calls, done, stages, status, alternatives } = state;
   const spent = calls.filter((c) => c.credit).length;
   const saved = calls.filter((c) => c.kind === "exact" || c.kind === "semantic").length;
@@ -53,6 +55,8 @@ export default function UnderTheHood({ state }: { state: SearchState }) {
           hint={done && done.est_time_saved_ms ? `≈ ${fmtMs(done.est_time_saved_ms)} of waiting saved` : undefined}
         />
       </div>
+
+      {note && <p className="mt-3 rounded-lg border border-line bg-panel-2 px-3 py-2 text-xs text-muted">{note}</p>}
 
       {/* Waterfall */}
       <div className="mt-5">

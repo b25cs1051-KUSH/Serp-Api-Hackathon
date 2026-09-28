@@ -161,3 +161,84 @@ export const fmtTtl = (s: number | null) => {
 
 export const fmtBytes = (b: number) =>
   b >= 1_048_576 ? `${(b / 1_048_576).toFixed(1)} MB` : b >= 1024 ? `${Math.round(b / 1024)} KB` : `${b} B`;
+
+/** One prescription line bought at one pharmacy (pharmawatch/basket.py offer). */
+export interface BasketOffer {
+  line: number;
+  brand: string;
+  platform: string;
+  packs: number;
+  pack_size: number;
+  pack_estimated: boolean;
+  price_inr: number;
+  item_cost: number;
+  per_tablet: number;
+  prescribed: boolean;
+  medicine_name: string;
+  manufacturer?: string | null;
+  direct_link?: string;
+  search_link?: string;
+  google_link?: string;
+}
+
+export interface BasketStore {
+  platform: string;
+  lines: BasketOffer[];
+  subtotal: number;
+  fee: number;
+  delivery_label: string;
+  free_delivery: boolean;
+  total: number;
+}
+
+export interface BasketPlan {
+  total: number;
+  items_total: number;
+  fees_total: number;
+  stores: BasketStore[];
+}
+
+export interface BasketMode {
+  best: BasketPlan | null;
+  single_store: BasketPlan | null;
+  lines: number[];
+}
+
+export interface BasketResult {
+  with_swaps: BasketMode;
+  as_prescribed: BasketMode;
+  saving: number | null;
+  saving_lines: number[];
+  per_line: {
+    line: number;
+    query: string;
+    tablets: number | null;
+    tablets_how: string;
+    cheapest_prescribed: Omit<BasketOffer, "line"> | null;
+    cheapest_any: Omit<BasketOffer, "line"> | null;
+  }[];
+  unavailable: number[];
+  skipped: number[];
+  stats: { combinations: number; ms: number };
+  timings?: Record<string, number>;
+}
+
+export interface RxItem {
+  q: string;
+  tablets: number | null;
+}
+
+export interface RxLine {
+  line: number;
+  query: string;
+  status: "choose" | "main" | "done";
+  listings?: Listing[];
+  alternatives?: AltResult | null;
+  choose?: ChooseOptions;
+  tablets?: number | null;
+  tablets_how?: string;
+  offers?: number;
+}
+
+export const buyLink = (o: { direct_link?: string; search_link?: string; google_link?: string }) =>
+  o.direct_link || o.search_link || o.google_link || undefined;

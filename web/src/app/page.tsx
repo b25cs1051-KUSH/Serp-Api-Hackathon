@@ -1,9 +1,11 @@
 "use client";
 
-import { Coins, Cpu, Link2, Loader2, MapPin, Repeat, Search, ShoppingBag } from "lucide-react";
+import { ClipboardList, Coins, Cpu, Link2, Loader2, MapPin, Pill as PillIcon, Repeat, Search, ShoppingBag } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Alternatives from "@/components/Alternatives";
 import AnswerCard from "@/components/AnswerCard";
+import BasketCard from "@/components/BasketCard";
+import PrescriptionForm, { RX_EXAMPLE } from "@/components/PrescriptionForm";
 import ChooseCard from "@/components/ChooseCard";
 import CacheExplorer from "@/components/CacheExplorer";
 import CacheFlow from "@/components/CacheFlow";
@@ -11,7 +13,8 @@ import CacheLab from "@/components/CacheLab";
 import Results from "@/components/Results";
 import UnderTheHood from "@/components/UnderTheHood";
 import { Pill, SectionTitle, Stat } from "@/components/ui";
-import { fmtMs, getJSON, type Account, type CacheEntries, type Health, type Stats } from "@/lib/api";
+import { fmtMs, getJSON, type Account, type CacheEntries, type Health, type RxItem, type Stats } from "@/lib/api";
+import { asSearchState, usePrescription } from "@/lib/usePrescription";
 import { useSearch } from "@/lib/useSearch";
 
 const EXAMPLES = ["Stamlo 5", "Dolo 650", "Glyciphage SR 500", "Atorvastatin 10mg", "Pan-D"];
@@ -80,6 +83,20 @@ export default function Home() {
 
   const { state, run } = useSearch(refresh);
   const running = state.status === "running";
+  const [mode, setMode] = useState<"one" | "rx">("one");
+  const [rxItems, setRxItems] = useState<RxItem[]>(RX_EXAMPLE);
+  const rx = usePrescription(refresh);
+  const rxRunning = rx.state.status === "running";
+  const submitRx = (items = rxItems) => {
+    const clean = items.map((it) => ({ q: it.q.trim().replace(/\s+/g, " "), tablets: it.tablets })).filter((it) => it.q.length >= 2);
+    if (!clean.length || rxRunning) return;
+    rx.run(clean, pincode, links && engine);
+  };
+  const pickRx = (line: number, q: string) => {
+    const items = rx.state.items.map((it, i) => (i === line ? { ...it, q } : it));
+    setRxItems(items);
+    rx.run(items, rx.state.pincode, links && engine);
+  };
 
   useEffect(() => {
     let stop = false;
@@ -156,12 +173,34 @@ export default function Home() {
             : "Compare 1mg, PharmEasy, Apollo, Medplus and more with delivery to your PIN included, and see cheaper brands with the same salt."}
         </p>
 
+        <div role="group" aria-label="What to search" className="mt-6 inline-flex rounded-xl border border-line bg-panel-2 p-1 text-sm">
+          {([
+            ["one", "One medicine", PillIcon],
+            ["rx", "Whole prescription", ClipboardList],
+          ] as const).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={mode === id}
+              onClick={() => setMode(id)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition ${mode === id ? "bg-ink text-bg" : "text-muted hover:text-ink"}`}
+            >
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          ))}
+        </div>
+
+        {mode === "rx" && (
+          <PrescriptionForm items={rxItems} setItems={setRxItems} pincode={pincode} setPincode={setPincode} running={rxRunning} onSubmit={() => submitRx()} />
+        )}
+
+        {mode === "one" && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
             submit();
           }}
-          className="card mt-6 flex flex-col gap-2 p-2 md:flex-row"
+          className="card mt-3 flex flex-col gap-2 p-2 md:flex-row"
         >
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
@@ -190,10 +229,11 @@ export default function Home() {
             Compare
           </button>
         </form>
+        )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] text-faint">try:</span>
-          {EXAMPLES.map((e) => (
+          {mode === "one" && <span className="text-[11px] text-faint">try:</span>}
+          {mode === "one" && EXAMPLES.map((e) => (
             <button key={e} onClick={() => submit(e)} disabled={running} className="rounded-full border border-line px-3 py-1 text-xs text-muted hover:border-hit/40 hover:text-ink disabled:opacity-40">
               {e}
             </button>
@@ -208,7 +248,37 @@ export default function Home() {
       </section>
 
       {/* Results + under the hood */}
-      {state.status !== "idle" && !engine && (
+      {mode === "rx" && rx.state.status !== "idle" && !engine && (
+        <section className="space-y-5">
+          {rx.state.error && <div className="card border-bad/40 p-4 text-sm text-bad">{rx.state.error}</div>}
+          <BasketCard basket={rx.state.basket} lines={rx.state.lines} items={rx.state.items} running={rxRunning} onPick={pickRx} />
+        </section>
+      )}
+
+      {mode === "rx" && rx.state.status !== "idle" && engine && (
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+          <div className="space-y-5">
+            {rx.state.error && <div className="card border-bad/40 p-4 text-sm text-bad">{rx.state.error}</div>}
+            <BasketCard basket={rx.state.basket} lines={rx.state.lines} items={rx.state.items} running={rxRunning} onPick={pickRx} />
+          </div>
+          <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
+            <UnderTheHood
+              state={asSearchState(rx.state)}
+              note={rx.state.basket ? `Basket optimiser: ${rx.state.basket.stats.combinations.toLocaleString("en-IN")} ways to buy it priced with each pharmacy's delivery rules in ${fmtMs(rx.state.basket.stats.ms)}` : undefined}
+            />
+            {rx.state.status === "done" && (
+              <button
+                onClick={() => rx.run(rx.state.items, rx.state.pincode, links)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-hit/30 bg-hit/10 py-3 text-sm font-medium text-hit hover:bg-hit/15"
+              >
+                <Repeat className="h-4 w-4" /> Run the same prescription again: watch it cost 0 credits
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {mode === "one" && state.status !== "idle" && !engine && (
         <section className="space-y-5">
           {state.error && <div className="card border-bad/40 p-4 text-sm text-bad">{state.error}</div>}
           {state.choose ? (
@@ -235,7 +305,7 @@ export default function Home() {
         </section>
       )}
 
-      {state.status !== "idle" && engine && (
+      {mode === "one" && state.status !== "idle" && engine && (
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <div className="space-y-5">
             {state.error && <div className="card border-bad/40 p-4 text-sm text-bad">{state.error}</div>}
