@@ -110,8 +110,13 @@ On top of that:
 - **Call log.** Every lookup records engine, query, outcome (exact / semantic / API call), time taken,
   whether it cost a credit, and *why* it happened ("substitute search: Amlokind 5"). The UI shows it live.
 - **Redis down?** The cache runs in passthrough mode: every search goes to SerpApi, nothing crashes.
+- **`json_restrictor`.** PharmaWatch asks SerpApi only for the fields it reads (`pharmawatch/search.py`),
+  so less is transferred and cached. The restrictor is part of the cache key, because a restricted
+  response has a different shape. It is not part of the embedded text, so similarity scores are unchanged.
 
-Measured: SerpApi calls took **1.7–12 s**; cache hits took **1–20 ms**.
+Measured: SerpApi calls took **1.7–12 s**; cache hits took **1–20 ms**. With `json_restrictor`, a
+Google Shopping entry in Redis went from **187–282 KB to 111–125 KB** (40 results; the page tokens
+needed for direct links are 58% of what is left), and a product-page entry from **~27 KB to 212 bytes**.
 
 ---
 

@@ -20,6 +20,23 @@ load_dotenv()
 # ─────────────────────────────────────────────
 
 _PRICE_TTL = 86_400  # 24 hours — prices cached per day
+
+# SerpApi json_restrictor: only the fields distiller.distill_shopping_results and pick_store_link
+# read are returned and cached. Part of the cache key (a restricted response has a different shape).
+SHOPPING_RESTRICTOR = (
+    "shopping_results[].{title,source,source_icon,link,product_link,merchant_link,seller_link,"
+    "price,extracted_price,delivery,thumbnail,serpapi_thumbnail,immersive_product_page_token}"
+)
+PRODUCT_RESTRICTOR = "product_results.stores[].{name,link}"
+
+# google_shopping params for a price search, minus "q" (the API's cache lab uses the same dict).
+SHOPPING_PARAMS = {
+    "engine": "google_shopping",
+    "google_domain": "google.co.in",
+    "gl": "in",
+    "hl": "en",
+    "json_restrictor": SHOPPING_RESTRICTOR,
+}
 _cache_instance: Optional[SerpApiCache] = None
 _cache_lock = threading.Lock()
 
@@ -61,13 +78,7 @@ def search_prices(medicine_name: str, verbose: bool = True, exact_only: bool = F
     Returns : Raw SerpApi shopping JSON (pass to distiller.distill_shopping_results)
     """
     cache = _get_cache(verbose=verbose)
-    params = {
-        "engine": "google_shopping",
-        "q": f"{medicine_name} price",
-        "google_domain": "google.co.in",
-        "gl": "in",
-        "hl": "en",
-    }
+    params = {**SHOPPING_PARAMS, "q": f"{medicine_name} price"}
     return cache.search(params, ttl=_PRICE_TTL, exact_only=exact_only)
 
 
@@ -136,6 +147,7 @@ def get_direct_merchant_link(
     params = {
         "engine": "google_immersive_product",
         "page_token": page_token,
+        "json_restrictor": PRODUCT_RESTRICTOR,
     }
     res = cache.search(params, ttl=_PRICE_TTL)
     return pick_store_link(res.get("product_results", {}).get("stores", []), target_platform)

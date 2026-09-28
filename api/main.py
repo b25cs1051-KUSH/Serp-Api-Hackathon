@@ -54,7 +54,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from pharmawatch.delivery_cost import normalize_pincode
 from pharmawatch.pipeline import search_medicine_stream
-from pharmawatch.search import _get_cache, warm_up
+from pharmawatch.search import SHOPPING_PARAMS, _get_cache, warm_up
 from serpapi_cache.backends import RedisBackend
 
 load_dotenv()
@@ -67,7 +67,7 @@ except ImportError:
     _LAB_AVAILABLE = False
 
 # Same params as pharmawatch.search.search_prices, so the lab predicts what a search would do.
-_SHOPPING_PARAMS = {"engine": "google_shopping", "google_domain": "google.co.in", "gl": "in", "hl": "en"}
+_SHOPPING_PARAMS = SHOPPING_PARAMS
 _DEFAULT_MISS_MS = 7000  # used for "time saved" until this process has timed a real API call
 
 MAX_CONCURRENT_SEARCHES = int(os.getenv("MAX_CONCURRENT_SEARCHES", "4"))
