@@ -85,7 +85,10 @@ async def part1_in_memory():
     try:
         async with Client(mcp_server.mcp) as client:
             tools = {t.name: t for t in (await client.list_tools()).tools}
-            check("tools", sorted(tools), ["cache_lab", "cache_stats", "search_medicine"])
+            check("tools", sorted(tools), ["cache_lab", "cache_stats", "plan_prescription", "search_medicine"])
+            rx = tools["plan_prescription"]
+            check("prescription tool: medicines + pincode required", sorted(rx.input_schema.get("required", [])),
+                  ["medicines", "pincode"])
             s = tools["search_medicine"]
             check("search required args", sorted(s.input_schema.get("required", [])), ["pincode", "query"])
             check("ctx hidden from schema", "ctx" in s.input_schema["properties"], False)
@@ -144,6 +147,38 @@ async def part1_in_memory():
                 yield "choose", {"query": query, "reason": "strength not given",
                                  "options": [{"label": "Paracetamol 650mg tablet", "query": "Paracetamol 650mg", "comp_key": "k"}]}
             api.search_medicine_stream = choose_stub
+
+            def rx_stub(lines, pincode, resolve_links=False, use_llm=True, verbose=False):
+                log_call("line 1 main: Dolo 650", "exact_hit", False)
+                yield "line", {"line": 1, "query": "paracetamol", "status": "choose",
+                               "choose": {"query": "paracetamol", "reason": "strength not given",
+                                          "options": [{"label": "Paracetamol 650mg tablet", "query": "Paracetamol 650mg"}]}}
+                offer = {"line": 0, "brand": "Paracip 650", "platform": "Chemist180", "packs": 3, "pack_size": 10,
+                         "pack_estimated": True, "item_cost": 41.82, "per_tablet": 1.39, "prescribed": False,
+                         "search_link": "https://chemist180.com/s", "page_token": "tok-x"}
+                plan = {"total": 41.82, "items_total": 41.82, "fees_total": 0.0,
+                        "stores": [{"platform": "Chemist180", "lines": [offer], "subtotal": 41.82, "fee": 0.0,
+                                    "delivery_label": "FREE", "free_delivery": True, "total": 41.82}]}
+                yield "basket", {"with_swaps": {"best": plan, "single_store": plan, "lines": [0]},
+                                 "as_prescribed": {"best": None, "single_store": None, "lines": []},
+                                 "saving": 10.82, "saving_lines": [0], "per_line": [], "unavailable": [],
+                                 "skipped": [1], "stats": {"combinations": 1, "ms": 0.1}}
+            real_rx = api.prescription_stream
+            api.prescription_stream = rx_stub
+            try:
+                r = await client.call_tool("plan_prescription", {"medicines": [{"name": "Dolo 650", "tablets": 30},
+                                                                                {"name": "paracetamol"}],
+                                                                  "pincode": "110001"})
+            finally:
+                api.prescription_stream = real_rx
+            md = text(r)
+            check("prescription: basket in markdown", (r.is_error, "**Cheapest basket: ₹41.82**" in md,
+                                                       "| Chemist180 | Dolo 650 | Paracip 650 (same-salt swap) | 3 × ~10 |" in md),
+                  (False, True, True))
+            check("prescription: asks for the missing strength", "**Which paracetamol?**" in md and "`Paracetamol 650mg`" in md, True)
+            check("prescription: no page token in output", "tok-x" in md, False)
+            r = await client.call_tool("plan_prescription", {"medicines": [], "pincode": "110001"})
+            check("prescription: empty list rejected by schema", r.is_error, True)
             r = await client.call_tool("search_medicine", {"query": "paracetamol", "pincode": "110001"})
             check("needs a strength: options, not an error", (r.is_error, text(r).startswith("## Which paracetamol?"),
                                                              "`Paracetamol 650mg`" in text(r)), (False, True, True))
@@ -178,7 +213,7 @@ async def part2_stdio(run: int):
     async with Client(params, message_handler=on_message) as client:
         check("server name", client.server_info.name, "pharmawatch")
         check("instructions sent", "credits" in (client.instructions or ""), True)
-        check("3 tools over stdio", len((await client.list_tools()).tools), 3)
+        check("4 tools over stdio", len((await client.list_tools()).tools), 4)
         r = await client.call_tool("cache_lab", {"query": "Stamlo 5"})  # races the model warm-up
         lab_error = r.is_error
         r = await client.call_tool("cache_stats", {"response_format": "json"})

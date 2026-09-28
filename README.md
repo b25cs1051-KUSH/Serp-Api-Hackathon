@@ -1,25 +1,30 @@
 # PharmaWatch
 
-Type a medicine and your PIN code. PharmaWatch shows what it actually costs **delivered to your door**
-from 13 Indian online pharmacies, and whether a **generic with the same composition** is cheaper.
+Type a medicine, or a whole prescription, and your PIN code. PharmaWatch shows what it actually costs
+**delivered to your door** from 13 Indian online pharmacies, finds **brands with the same composition**
+that are cheaper, and works out the **cheapest way to buy everything**, delivery fees included.
 
 ```
-Search: "Stamlo 5" (amlodipine 5 mg, blood pressure) · PIN 110001
+Prescription · PIN 110001: Dolo 650 ×30 tablets, Stamlo 5, Atorbest 10
 
-  Stamlo 5 @ Chemist180     ₹66.02 delivered   ~₹2.20 / tablet (pack size estimated)
-  Amlokind 5 @ Chemist180   ₹19.41 delivered   ~₹1.29 / tablet (pack size estimated)
-  → same medicine, same strength: save ~41% per tablet
+  Cheapest basket  ₹93.37   one order at Chemist180, free delivery
+    Paracip 650  3 × 10   ₹41.82   ₹1.39/tablet   same salt as Dolo 650
+    Amodep 5     2 × 15   ₹30.16   ₹1.01/tablet   same salt as Stamlo 5 (₹2.20/tablet)
+    Torvason 10  1 × 10   ₹21.39   ₹2.14/tablet   same salt as Atorbest 10 (not sold online here)
+  → ₹46.68 less than the prescribed brands (on the 2 sold online)
 ```
 
 It is built on [SerpApi](https://serpapi.com) (Google Shopping + Google product pages), a Redis cache
-that decides when *not* to call SerpApi, and Gemini, used for one narrow job: picking substitutes
-from a curated catalogue.
+that decides when *not* to call SerpApi, an index of 246,046 Indian medicines that says which brands
+share a composition, and Gemini, used for one narrow job: reading misspellings.
 
 ---
 
 ## Contents
 
 - [How a search works](#how-a-search-works)
+- [A whole prescription](#a-whole-prescription)
+- [Cheaper than the pharmacies' own suggestions](#cheaper-than-the-pharmacies-own-suggestions)
 - [Medicine data](#medicine-data)
 - [Keeping the LLM grounded](#keeping-the-llm-grounded)
 - [The cache](#the-cache)
@@ -44,10 +49,10 @@ Everything after the first step runs in parallel. Results reach the browser as e
       └─ Google Shopping: "Stamlo 5 price" ──▶ main list (only real Stamlo 5 listings)
             │                                 └─▶ product page links for the top 5 (parallel)
             │
-            └─ one more search in the salt: "Amlodipine 5mg" ─▶ pool both searches
-                   (salt search: the widest-range brand)  ▶ every brand of the salt found anywhere,
-                                                            per tablet, delivery included
-                                                          ▶ links for the cheaper ones
+            ├─ "Amlodipine 5mg tablet generic" ─┐  pool all 3 searches
+            └─ "Amlopres 5" (Cipla)            ─┴▶ every brand of the salt found anywhere,
+                                                    per tablet, delivery included
+                                                  ▶ links for the cheaper ones
 ```
 
 1. **What the search names.** `pharmawatch/medicines.py` looks the words up in an index of **246,046
@@ -59,12 +64,13 @@ Everything after the first step runs in parallel. Results reach the browser as e
    remote / unserviceable), free-delivery thresholds, fee slabs and platform fees. The list is ranked
    by the delivered price, not the shelf price. For a salt search the main list is every brand of
    that exact composition.
-3. **Substitute search.** Every brand with the same composition key (salts, strengths, form,
-   release type) is a substitute. A brand search adds **one search by salt** ("Amlodipine 5mg"):
-   Google answers it with the brands of that salt that are sold online. A salt search adds one search
-   for the brand whose maker has the widest range. See
-   [problem 11](#11-picking-brands-to-search-by-list-price-was-a-guess).
-4. **Pooling.** Every listing from both searches is checked against **every** brand of the
+3. **Substitute searches.** Every brand with the same composition key (salts, strengths, form,
+   release type) is a substitute. Two searches are added, chosen for reach: the salt + "tablet
+   generic" (Google then lists the discounted generics pharmacies push) and the Cipla brand of the
+   salt with the largest family (a salt search without one gets the brand whose maker has the widest
+   range). See [problem 11](#11-picking-brands-to-search-by-list-price-was-a-guess) and
+   [problem 12](#12-the-pharmacies-favourite-generics-are-cheap-only-after-discount).
+4. **Pooling.** Every listing from all 3 searches is checked against **every** brand of the
    composition, so brands nobody searched for are compared too (see
    [problem 3](#3-a-brands-own-search-often-doesnt-return-that-brand)).
 5. **Comparison.** Per-tablet price, delivery included. Missing pack sizes are estimated from the
@@ -77,6 +83,44 @@ The browser receives four events: `main`, `main_update` (only if pooling found m
 search needs a strength first.
 
 ---
+
+## A whole prescription
+
+Up to 8 medicines, each with an optional number of tablets (else one pack of the prescribed
+medicine). Every line is resolved in the medicine index at once, a line without a strength
+("paracetamol") asks for one and the rest carry on, and **every search of every line runs at the
+same time**: 3 medicines take about as long as 1.
+
+Then the basket is optimised as a whole (`pharmawatch/basket.py`). Each pharmacy charges delivery on
+its own order total (1mg free from ₹100, Apollo from ₹199, Netmeds from ₹500, Chemist180 always), so
+buying each medicine where it is cheapest alone can cost more than putting two in one order.
+
+- Every same-composition offer covers the needed tablets in whole packs.
+- Every way of assigning medicines to pharmacies is priced with the real delivery rules on each
+  pharmacy's subtotal. It is exact over the cheapest offer per pharmacy and medicine, checked against
+  brute force on 60 random baskets. 8 medicines: 131,072 assignments in about 0.5 s.
+- Two answers: **cheapest with same-salt swaps** and **exactly as prescribed**, plus the best single
+  pharmacy and the saving (compared on the medicines both can cover).
+- Direct product links are resolved only for the offers the basket picked.
+
+The UI's *Whole prescription* tab streams each medicine as it finishes; *Under the hood* shows every
+lookup of every line and how many assignments the optimiser priced. The same basket is available as
+`GET /api/prescription/stream`, `GET /api/prescription` and the MCP tool `plan_prescription`.
+
+## Cheaper than the pharmacies' own suggestions
+
+1mg, Chemist180 and Medplus show a "cheaper alternative" on a medicine's page. PharmaWatch has to
+beat it, or the product makes no sense. `scripts/benchmark.py` checks this on the real pipeline,
+per tablet delivered:
+
+| Medicine | Pharmacy's suggestion | PharmaWatch's cheapest |
+|---|---|---|
+| Dolo 650 | Paracip 650 @ Chemist180, ₹1.39 | Paracip 650 @ Chemist180, ₹1.39 (₹1.08 at Netmeds once an order clears its ₹500 threshold) |
+| Stamlo 5 | Amlip 5 @ Chemist180, ₹1.35 | **Amodep 5 @ Chemist180, ₹1.01** |
+| Atorbest 10 | Lipvas 10 @ Chemist180, ₹3.30 | **Torvason 10 @ Chemist180, ₹2.14** |
+
+How: besides the main search, each medicine gets two searches chosen for reach (see
+[problem 12](#12-the-pharmacies-favourite-generics-are-cheap-only-after-discount)).
 
 ## Medicine data
 
@@ -283,19 +327,43 @@ up (20 of the 25 listings), so any search in the same salt widens the pool.
 maker has the widest range ("Sitagliptin 50mg" → Istavel 50: 2 listings became 14). A new medicine
 costs 2 credits instead of 4.
 
+### 12. The pharmacies' favourite generics are cheap only after discount
+
+On 1mg, Chemist180 and Medplus, the "cheaper alternative" for Dolo 650, Stamlo 5 and Atorbest 10 was a
+Cipla brand every time (Paracip 650, Parafast 650, Amlip 5, Lipvas 10). By list price they are
+**expensive**: Paracip ranks 449th of 500 paracetamol-650 brands, Amlip 243rd of 281, Lipvas 557th of
+655. They are cheap only after the pharmacies' discount (Amlip: ₹3.24 list, ₹1.35 sold), so no
+list-price rule finds them, and Google's plain salt search didn't return them either.
+
+**Fix:** two searches chosen for reach. One is the salt + "tablet generic", which steers Google to
+discounted generics ("Atorvastatin 10mg tablet generic" found Torvason 10 at ₹2.14/tablet; the plain
+salt found ₹2.47). The other is the Cipla brand with the largest family ("Paracip 650", not the thin
+"Cipmol 650": 29 listings of 10 same-salt brands). Every result is pooled and checked against the
+whole composition group.
+
+### 13. The semantic cache served one brand's results for another
+
+"Atorbest 10 price" was answered from the cached search of another atorvastatin brand: same dose,
+similar text, similarity above 0.88. The main list came back empty.
+
+**Fix:** a search the index identifies as a brand is looked up by exact name only, like substitute
+searches (problem 1). Salt searches still use the semantic cache.
+
 ## What one search costs
 
 | Call | SerpApi credits | When |
 |---|---|---|
 | Main search | 1 | Always, unless cached (24 h) |
-| Same-salt search | 1 | "Amlodipine 5mg" for Stamlo 5; for a salt search, the brand with the widest maker range |
+| Generic salt search | 1 | "Amlodipine 5mg tablet generic" for Stamlo 5 |
+| Discounted-generic brand | 1 | The Cipla brand of the salt with the largest family ("Paracip 650"); for a salt search without one, the brand with the widest maker range |
 | Product-page links, main list | up to 5 | Only the top 5 real matches, only when links are on |
 | Product-page links, alternatives | 0–3 | The 3 cheapest alternatives that beat the searched brand |
 | Gemini | 0 SerpApi credits | Only for misspellings with several possible readings, then cached |
 | A search without a strength ("paracetamol") | 0 | The user picks a strength first |
 
-A new medicine costs at most 10 credits, and **2** with links off. Repeating it
-within 24 hours costs **0**, and a later search that shares a salt reuses the cached salt search.
+A new medicine costs at most 11 credits, and **3** with links off. Repeating it within 24 hours
+costs **0**, and a later search that shares a salt reuses the cached searches. A prescription costs
+the sum of its new medicines, with links resolved only for the offers the basket picked.
 
 ---
 
@@ -398,7 +466,8 @@ the concurrency limit, the search deadline and credit accounting are the same as
 
 | Tool | What it does | Credits |
 |---|---|---|
-| `search_medicine(query, pincode, resolve_links=false)` | Delivered-price ranking for the PIN, cheaper generics with per-tablet savings, and a calls/credits summary | up to ~12 for a new medicine, 0 from cache |
+| `search_medicine(query, pincode, resolve_links=false)` | Delivered-price ranking for the PIN, cheaper generics with per-tablet savings, and a calls/credits summary | 3 for a new medicine, 0 from cache |
+| `plan_prescription(medicines[{name, tablets?}], pincode)` | The cheapest basket for a whole prescription: which medicine to buy where, delivery included, the best single pharmacy, the saving from same-salt swaps, and which lines need a strength | 3 per new medicine, 0 from cache |
 | `cache_lab(query, top=6)` | What the cache would do: exact key, nearest cached queries with cosine scores, the dosage guard | 0 |
 | `cache_stats()` | Redis status, what is cached (by kind and size), credits spent vs saved this session | 0 |
 
@@ -477,13 +546,16 @@ Reference: Stamlo 5MG Tablet at ₹66.02, ₹2.20/tablet.
 ## Tests
 
 ```bash
-python scripts/test_p5_generics.py                           # 116 offline checks, 0 credits
+python scripts/test_p5_generics.py                           # 117 offline checks, 0 credits
+python scripts/test_basket.py                                # 20 basket checks incl. brute force, 0 credits
 python scripts/test_p4_delivery_cost.py                      # delivery rules, 0 credits
-python scripts/test_api.py                                   # 43 API checks, stubbed pipeline, 0 credits
+python scripts/test_api.py                                   # 54 API checks, stubbed pipeline, 0 credits
 python scripts/test_mcp.py                                   # MCP tools in memory + 3 real stdio sessions, 0 credits
 python scripts/test_p5_generics.py --llm "dollo 650" "Telma 40 H"          # Gemini only, 0 SerpApi credits
 python scripts/test_p5_generics.py "Stamlo 5" 110001 --cache-only          # replay from Redis, 0 credits
 python scripts/test_p5_generics.py "Stamlo 5" 110001                       # live run, full call log
+python scripts/benchmark.py                                  # vs the pharmacies' own suggestions (live, cached = 0)
+python scripts/live_prescription.py "Dolo 650 x30" "Stamlo 5"               # a whole prescription, live
 ```
 
 The offline checks use real titles and prices from live runs, and cover the matching rules, pack
@@ -509,11 +581,13 @@ pharmawatch/
   generics.py           catalogue matching, brand/strength filtering, pooling, pack estimation
   gemini.py             Gemini REST client (JSON schema, model fallback chain)
   pipeline.py           the parallel search, streamed as events
+  prescription.py       a whole prescription: every line's searches at once, then the basket
+  basket.py             the cheapest way to buy it: offers, delivery per pharmacy subtotal, exact search
   medicines.py          what a search names: brand / salt / needs a strength, same-composition brands
   drug_db/medicines.sqlite.gz   246,046 medicines from the Indian Medicine Dataset (MIT)
 notes/postal_codes_delivery_rules.json   PIN zones and delivery fees per pharmacy
 api/                    FastAPI layer (SSE search, health, cache lab)
-mcp_server.py           MCP server (stdio): the same search and cache lab as tools
+mcp_server.py           MCP server (stdio): search, prescription basket and cache lab as tools
 web/                    Next.js UI
 scripts/                offline tests, live replay, threshold tuning
 docker-compose.yml      Redis + API + UI, with healthchecks (api/Dockerfile, web/Dockerfile)

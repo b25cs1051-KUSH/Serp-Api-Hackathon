@@ -5,6 +5,7 @@ Tools (all thin wrappers over api/main.py, so validation, the concurrency limit,
 deadline and credit accounting are the same as the HTTP API):
 
   search_medicine(query, pincode, resolve_links=False)   delivered prices + cheaper generics
+  plan_prescription(medicines, pincode)                  the cheapest way to buy a whole prescription
   cache_lab(query)                                       what the cache would do, 0 credits
   cache_stats()                                          Redis contents + hit/credit counters
 
@@ -25,7 +26,7 @@ import sys
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
@@ -40,7 +41,7 @@ from mcp.server.mcpserver import Context, MCPServer  # noqa: E402
 from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 from mcp.server.stdio import stdio_server  # noqa: E402
 from mcp.types import ToolAnnotations  # noqa: E402
-from pydantic import Field  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
 
 import api.main as api  # noqa: E402
 
@@ -281,6 +282,97 @@ async def search_medicine(
     if result["error"] and not result["listings"]:
         raise ToolError(f"{result['error']['code']}: {result['error']['message']}")
     return _search_json(result) if response_format == "json" else _search_markdown(result)
+
+
+class PrescriptionItem(BaseModel):
+    name: Annotated[str, Field(min_length=2, max_length=120,
+                               description="Medicine as written on the prescription: brand or salt with strength, "
+                                           "e.g. 'Dolo 650', 'Atorvastatin 10mg'.")]
+    tablets: Annotated[Optional[int], Field(default=None, ge=1, le=500,
+                                            description="Tablets needed. Omit to buy one pack.")] = None
+
+
+def _plan_markdown(r: dict) -> str:
+    b, items = r["basket"], r["items"]
+
+    def name(i):
+        return items[i]["query"] if i < len(items) else f"line {i + 1}"
+
+    out = [f"## Prescription: cheapest way to buy it, delivered to PIN {r['pincode']}", ""]
+    if r["error"]:
+        out += [f"> **Incomplete ({r['error']['code']}):** {r['error']['message']}", ""]
+    for key in sorted(r["lines"], key=int):
+        ln = r["lines"][key]
+        if ln.get("status") == "choose":
+            opts = ", ".join(f"`{o['query']}`" for o in ln["choose"]["options"][:6])
+            out += [f"**Which {ln['query']}?** Not searched yet (0 credits). Ask the user, then call again with one of: {opts}", ""]
+    if not b:
+        return "\n".join(out + ["No basket could be built."])
+    plan = b["with_swaps"]["best"]
+    if plan:
+        orders = " + ".join(s["platform"] for s in plan["stores"])
+        out += [f"**Cheapest basket: {_inr(plan['total'])}** ({_inr(plan['items_total'])} medicines + "
+                f"{_inr(plan['fees_total'])} delivery), {len(plan['stores'])} order{'s' if len(plan['stores']) > 1 else ''}: {orders}."]
+        if b.get("saving"):
+            out.append(f"That is {_inr(b['saving'])} less than the prescribed brands"
+                       f" (compared on {len(b['saving_lines'])} of them, the ones sold online).")
+        out += ["", "| Order at | Medicine | Buy | Packs | Cost | Per tablet | Link |", "|---|---|---|---|---|---|---|"]
+        for st in plan["stores"]:
+            for o in st["lines"]:
+                buy = o["brand"] + ("" if o["prescribed"] else " (same-salt swap)")
+                pack = f"{o['packs']} × {'~' if o['pack_estimated'] else ''}{o['pack_size']}"
+                out.append(f"| {_cell(st['platform'])} | {_cell(name(o['line']))} | {_cell(buy)} | {pack} | "
+                           f"{_inr(o['item_cost'])} | {_inr(o['per_tablet'])} | {_link(o)} |")
+        out.append("")
+        for st in plan["stores"]:
+            out.append(f"- {st['platform']}: {_inr(st['subtotal'])} + {_inr(st['fee'])} delivery = {_inr(st['total'])}")
+    single = b["with_swaps"]["single_store"]
+    if single and plan and single["total"] > plan["total"]:
+        out.append(f"\nOne order instead: {single['stores'][0]['platform']} has everything for {_inr(single['total'])}.")
+    ap = b["as_prescribed"]["best"]
+    if ap:
+        out.append(f"Exactly as prescribed: {_inr(ap['total'])} for the {sum(len(s['lines']) for s in ap['stores'])} brands sold online.")
+    if b["unavailable"]:
+        out.append(f"Not sold online for this PIN: {', '.join(name(i) for i in b['unavailable'])}.")
+    out += ["", "Swaps have the same salt, strength and form; the user should check with their doctor before switching.",
+            "", "### Run", _summary_line(r["summary"])]
+    return "\n".join(out)
+
+
+@mcp.tool(
+    title="Plan a prescription",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True,
+                                open_world_hint=True),
+    structured_output=False,
+)
+async def plan_prescription(
+    medicines: Annotated[list[PrescriptionItem], Field(min_length=1, max_length=8,
+                                                       description="The prescription, one entry per medicine.")],
+    pincode: Annotated[str, Field(max_length=20, description="6-digit Indian PIN code the order is delivered to.")],
+    response_format: ResponseFormat = "markdown",
+) -> str:
+    """Find the cheapest way to buy a whole prescription in India, delivery included.
+
+    Every medicine is searched at the same time (Google Shopping via SerpApi). Brands with the same salt,
+    strength and form are compared per tablet, and the basket is optimised as a whole: each pharmacy's
+    delivery fee and free-delivery threshold apply to its own order total, so two medicines in one order
+    can beat buying each where it is cheapest alone. Returns the cheapest split across pharmacies, the
+    best single-pharmacy order, the saving from same-salt swaps, and any medicine that needs a strength.
+    About 3 SerpApi credits per new medicine; repeats come from cache for 0.
+    """
+    items = [{"q": m.name, "tablets": m.tablets} for m in medicines]
+    try:
+        result = await anyio.to_thread.run_sync(
+            lambda: api.collect_prescription(items, pincode, False, True), abandon_on_cancel=True)
+    except api.SearchRejected as e:
+        raise ToolError(f"{e.code}: {e.message}") from None
+    if result["error"] and not result["basket"]:
+        raise ToolError(f"{result['error']['code']}: {result['error']['message']}")
+    if response_format == "json":
+        return json.dumps({k: result[k] for k in ("items", "pincode", "basket", "summary", "error")}
+                          | {"needs_strength": [ln for ln in result["lines"].values() if ln.get("status") == "choose"]},
+                          ensure_ascii=False)
+    return _plan_markdown(result)
 
 
 @mcp.tool(
