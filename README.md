@@ -20,6 +20,7 @@ from a curated catalogue.
 ## Contents
 
 - [How a search works](#how-a-search-works)
+- [Medicine data](#medicine-data)
 - [Keeping the LLM grounded](#keeping-the-llm-grounded)
 - [The cache](#the-cache)
 - [Problems we hit, and what fixed them](#problems-we-hit-and-what-fixed-them)
@@ -37,47 +38,81 @@ from a curated catalogue.
 Everything after the first step runs in parallel. Results reach the browser as each piece finishes.
 
 ```
- t=0  ┬─ Google Shopping: "Stamlo 5 price" ──▶ main list (only real Stamlo 5 listings)
-      │                                         └─▶ product page links for the top 5 (parallel)
+ t=0  what is "Stamlo 5"?  medicine index, ~1 ms, 0 credits → Amlodipine 5mg tablet, 281 brands
+      │   ("paracetamol" without a strength → the user picks one first; nothing is searched)
       │
-      └─ Gemini + compositions.md: 3 substitutes ─┬─ search "Amlokind 5"  ─┐
-                                                  ├─ search "Amtas 5"     ─┼─▶ pool every search
-                                                  └─ search "Amlopres 5"  ─┘   ▶ compare per tablet,
-                                                                                  delivery included
-                                                                                ▶ links for the cheaper ones
+      └─ Google Shopping: "Stamlo 5 price" ──▶ main list (only real Stamlo 5 listings)
+            │                                 └─▶ product page links for the top 5 (parallel)
+            │
+            └─ one more search in the salt: "Amlodipine 5mg" ─▶ pool both searches
+                   (salt search: the widest-range brand)  ▶ every brand of the salt found anywhere,
+                                                            per tablet, delivery included
+                                                          ▶ links for the cheaper ones
 ```
 
-1. **Main search.** Google Shopping via SerpApi. Listings are parsed, mapped to one of 13 known
+1. **What the search names.** `pharmawatch/medicines.py` looks the words up in an index of **246,046
+   Indian medicines** (see [Medicine data](#medicine-data)): a brand ("Stamlo 5"), a salt
+   ("Gliclazide 80mg") or a name that needs a strength first ("paracetamol", "Dolo"). Spelling is
+   corrected against the index ("dollo 650" → Dolo 650).
+2. **Main search.** Google Shopping via SerpApi. Listings are parsed, mapped to one of 13 known
    pharmacies, and **delivery cost for your PIN** is added: zone lookup (metro / tier 2 / tier 3 /
    remote / unserviceable), free-delivery thresholds, fee slabs and platform fees. The list is ranked
-   by the delivered price, not the shelf price.
-2. **Substitutes.** Gemini reads `pharmawatch/drug_db/compositions.md` (79 compositions, 307 brands)
-   and returns up to 3 brands with the same active ingredient, strength and release type.
-3. **Substitute searches.** All 3 run at the same moment, as soon as Gemini answers.
-4. **Pooling.** Listings from all 4 searches are merged. A brand is matched against every search, not
-   just its own (see [problem 3](#3-a-brands-own-search-often-doesnt-return-that-brand)).
-5. **Comparison.** Per-tablet price, delivery included. Missing pack sizes are estimated and flagged.
+   by the delivered price, not the shelf price. For a salt search the main list is every brand of
+   that exact composition.
+3. **Substitute search.** Every brand with the same composition key (salts, strengths, form,
+   release type) is a substitute. A brand search adds **one search by salt** ("Amlodipine 5mg"):
+   Google answers it with the brands of that salt that are sold online. A salt search adds one search
+   for the brand whose maker has the widest range. See
+   [problem 11](#11-picking-brands-to-search-by-list-price-was-a-guess).
+4. **Pooling.** Every listing from both searches is checked against **every** brand of the
+   composition, so brands nobody searched for are compared too (see
+   [problem 3](#3-a-brands-own-search-often-doesnt-return-that-brand)).
+5. **Comparison.** Per-tablet price, delivery included. Missing pack sizes are estimated from the
+   brand's other listings, then from its usual pack in the index, and flagged.
 6. **Direct links.** Resolving a listing to the pharmacy's own product page costs a SerpApi call, so it
    is done only for the top 5 main listings and for alternatives that are actually cheaper.
 
 The browser receives four events: `main`, `main_update` (only if pooling found more listings),
-`alternatives` and `main_links`, in whatever order they finish.
+`alternatives` and `main_links`, in whatever order they finish, or a single `choose` event when the
+search needs a strength first.
 
 ---
 
+## Medicine data
+
+Substitutes come from the **Indian Medicine Dataset** (253,973 medicines, MIT licence,
+[junioralive/Indian-Medicine-Dataset](https://github.com/junioralive/Indian-Medicine-Dataset)).
+`scripts/build_medicine_index.py` turns it into `pharmawatch/drug_db/medicines.sqlite.gz` (7 MB):
+246,046 products that aren't discontinued, 17,028 compositions and 7,641 manufacturers.
+
+Each product gets a **composition key**: its salts with strengths, its form and its release type.
+Products with the same key are interchangeable brands; anything else is a different medicine.
+
+| Search | Key | Brands | Not in the group |
+|---|---|---|---|
+| Gliclazide 80mg | `gliclazide:80mg\|tablet\|` | 116 (Glizid 80, Diamicron 80, Glycigon ...) | Glizid-M, Reclimet (+ metformin) |
+| Sitagliptin 50mg | `sitagliptin:50mg\|tablet\|` | 54 (Januvia 50, Istavel 50, Sitacip 50 ...) | Istamet (+ metformin), Setalin 50 (sertraline) |
+| Glyciphage SR 500 | `metformin:500mg\|tablet\|sr` | SR brands only | Glyciphage 500 (immediate release) |
+
+The list prices (MRP) in the dataset only decide which brands are worth searching. Every price shown
+comes live from SerpApi.
+
 ## Keeping the LLM grounded
 
-Gemini **never sees web data**. Prices and listings from SerpApi are filtered by deterministic code;
-the model only chooses from a catalogue we control, and its answer is checked before it is used.
+Gemini **never sees web data** and never names a medicine on its own. It has one job: when a
+misspelt search could be several medicines, pick which one the user meant **from candidates the
+index returns**.
 
 | Step | What happens |
 |---|---|
-| Input | The searched name + the 79-entry catalogue (ingredient, strength, release type, brands) |
-| Output | JSON with a fixed schema: `searched_brand`, up to 3 `alternatives`, a one-line `reason` |
-| Validation (code) | Every alternative must be a brand **listed in the same catalogue entry** as the searched medicine. Anything else is dropped: brands from other entries, invented brands, the searched brand itself |
-| Safety check (code) | A search carrying a suffix the entry doesn't list is rejected: "Telma 40 **H**" (telmisartan + hydrochlorothiazide) is not "Telma 40" |
-| Cost | One call per distinct search, cached for 30 days; the cache key includes a hash of the catalogue and the prompt, so editing either invalidates old answers |
-| Failure | Model chain (`gemini-2.5-flash` → `gemini-3.5-flash-lite` → …) on quota / overload / timeout; if all fail, a plain catalogue lookup takes over |
+| Input | The search + up to 4 index candidates, each with its composition |
+| Output | JSON with a fixed schema: the `choice` (a candidate number or null) and a one-line `reason` |
+| Validation (code) | The choice must be one of the candidates; anything else is ignored |
+| Cost | Only for ambiguous spellings. Cached for 30 days; the key includes a hash of the index and the prompt |
+| Failure | Model chain (`gemini-2.5-flash` → `gemini-3.5-flash-lite` → …) on quota / overload / timeout; if all fail, the closest spelling is used |
+
+Everything else (brand vs salt, which brands are substitutes, which listing is which brand) is
+deterministic code over the index.
 
 ---
 
@@ -135,7 +170,7 @@ Each of these came from a real run.
 "Calpol 650 price" and "Dolo 650 price" are close in meaning and share the same number, so the
 dosage guard lets them through. Served from cache, the user would see Dolo's prices under Calpol.
 
-**Fix:** brand names from the catalogue are looked up by exact name only (`exact_only=True`). Their
+**Fix:** substitute brand names are looked up by exact name only (`exact_only=True`). Their
 results are still stored with an embedding, so free-text searches can reuse them.
 
 ### 2. Google Shopping returns look-alike medicines
@@ -221,19 +256,46 @@ the console can't show instead of raising. Verified with a cp1252 console: the c
 
 ---
 
+### 10. A hand-written catalogue was wrong, and too small
+
+The first version took substitutes from `compositions.md`: 79 entries written with an LLM's help.
+Salt searches such as "Gliclazide 80mg" and "Sitagliptin 50mg" showed **0 listings**, because Google
+returns brand names and the filter looked for the salt in the title. Checking the catalogue against
+a real dataset also showed errors: **Istamet 50** (sitagliptin + metformin) and **Reclimet**
+(gliclazide + metformin) were listed as plain single-salt brands, and **Zita 50** is not sitagliptin
+at all. A title Google returned for "Sitagliptin 50mg", **Setalin 50**, turned out to be sertraline,
+an antidepressant.
+
+**Fix:** the catalogue was replaced by the 246,046-medicine index. A salt search now matches any
+brand with exactly that composition (Gliclazide 80mg: 18 listings from real cached results, where it
+showed 0), combinations are separate keys, and a listing only counts when its title is a brand the
+index places in the same group.
+
+### 11. Picking brands to search by list price was a guess
+
+The first version of the index-based search picked 3 cheap brands of the same salt by list price
+and searched each by name. Live, for Gliclazide 80mg, none of the 3 (Glypen 80, Glurib 80, Glic 80)
+appeared in its own results. Their results still held other gliclazide brands, which pooling picked
+up (20 of the 25 listings), so any search in the same salt widens the pool.
+
+**Fix:** one extra search, chosen for reach. A brand search adds the salt ("Stamlo 5" → "Amlodipine
+5mg": 9 same-salt brands, 3 of them 28–48% cheaper per tablet). A salt search adds the brand whose
+maker has the widest range ("Sitagliptin 50mg" → Istavel 50: 2 listings became 14). A new medicine
+costs 2 credits instead of 4.
+
 ## What one search costs
 
 | Call | SerpApi credits | When |
 |---|---|---|
 | Main search | 1 | Always, unless cached (24 h) |
-| Substitute searches | up to 3 | Unless cached |
-| Product-page links, main list | up to 5 | Only the top 5 real matches |
-| Product-page links, alternatives | 0–3 | Only alternatives that are cheaper |
-| Gemini | 0 SerpApi credits | Once per distinct search, then cached |
+| Same-salt search | 1 | "Amlodipine 5mg" for Stamlo 5; for a salt search, the brand with the widest maker range |
+| Product-page links, main list | up to 5 | Only the top 5 real matches, only when links are on |
+| Product-page links, alternatives | 0–3 | The 3 cheapest alternatives that beat the searched brand |
+| Gemini | 0 SerpApi credits | Only for misspellings with several possible readings, then cached |
+| A search without a strength ("paracetamol") | 0 | The user picks a strength first |
 
-A new medicine costs at most 12 credits (9 in each of our live runs). Repeating it within 24 hours
-costs **0**, and a later search
-for one of its substitutes reuses that substitute's cached listings.
+A new medicine costs at most 10 credits, and **2** with links off. Repeating it
+within 24 hours costs **0**, and a later search that shares a salt reuses the cached salt search.
 
 ---
 
@@ -415,9 +477,9 @@ Reference: Stamlo 5MG Tablet at ₹66.02, ₹2.20/tablet.
 ## Tests
 
 ```bash
-python scripts/test_p5_generics.py                           # 101 offline checks, 0 credits
+python scripts/test_p5_generics.py                           # 116 offline checks, 0 credits
 python scripts/test_p4_delivery_cost.py                      # delivery rules, 0 credits
-python scripts/test_api.py                                   # 38 API checks, stubbed pipeline, 0 credits
+python scripts/test_api.py                                   # 43 API checks, stubbed pipeline, 0 credits
 python scripts/test_mcp.py                                   # MCP tools in memory + 3 real stdio sessions, 0 credits
 python scripts/test_p5_generics.py --llm "dollo 650" "Telma 40 H"          # Gemini only, 0 SerpApi credits
 python scripts/test_p5_generics.py "Stamlo 5" 110001 --cache-only          # replay from Redis, 0 credits
@@ -447,7 +509,8 @@ pharmawatch/
   generics.py           catalogue matching, brand/strength filtering, pooling, pack estimation
   gemini.py             Gemini REST client (JSON schema, model fallback chain)
   pipeline.py           the parallel search, streamed as events
-  drug_db/compositions.md   79 compositions, 307 brands
+  medicines.py          what a search names: brand / salt / needs a strength, same-composition brands
+  drug_db/medicines.sqlite.gz   246,046 medicines from the Indian Medicine Dataset (MIT)
 notes/postal_codes_delivery_rules.json   PIN zones and delivery fees per pharmacy
 api/                    FastAPI layer (SSE search, health, cache lab)
 mcp_server.py           MCP server (stdio): the same search and cache lab as tools
@@ -464,10 +527,13 @@ docker-compose.yml      Redis + API + UI, with healthchecks (api/Dockerfile, web
   but cannot invent listings.
 - **Estimated pack sizes are estimates.** They are always flagged; a pharmacy selling an unusual pack
   can still be misread.
-- **Catalogue size.** Substitutes come only from `compositions.md` (79 compositions). A medicine outside
-  it still gets prices, but no alternatives.
-- **Strict matching.** "Augmentin 625 Duo" is rejected because "Duo" is treated as a different product;
-  adding the variant to the catalogue fixes it.
+- **Dataset age and gaps.** The dataset is a snapshot. Brands launched after it (for example Siglinu 50)
+  are not recognised in titles, so they are left out rather than guessed. A medicine the index doesn't
+  know still gets prices, but no alternatives.
+- **Two salts per product.** The dataset stores at most two salts, so a three-salt combination is keyed
+  on two. Titles still go through the combination guards (variant letters, second doses).
+- **Google decides which brands appear.** Alternatives are the same-salt brands Google Shopping lists
+  for the brand and salt searches. A cheap brand that Google doesn't show is not compared.
 - **Delivery fees** come from each pharmacy's published rules and can change.
 
 ---
