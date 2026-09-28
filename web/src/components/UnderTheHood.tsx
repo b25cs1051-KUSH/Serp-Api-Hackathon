@@ -71,7 +71,7 @@ export default function UnderTheHood({ state }: { state: SearchState }) {
           ))}
           <div className="space-y-1 pt-3">
             {geminiMs != null && (
-              <Bar label="Gemini · pick substitutes" left="0%" width={pct(geminiMs)} color="bg-llm" ms={geminiMs} />
+              <Bar label="Gemini · spelling fix" left="0%" width={pct(geminiMs)} color="bg-llm" ms={geminiMs} />
             )}
             {calls.map((c) => (
               <Bar

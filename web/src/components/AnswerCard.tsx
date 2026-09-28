@@ -64,7 +64,10 @@ export default function AnswerCard({
             {best.delivery_status === "free" ? "Free delivery" : best.delivery_label}
             {best.estimated_days && <> · arrives in {best.estimated_days}</>}
           </p>
-          <p className="mt-0.5 line-clamp-1 text-xs text-faint" title={best.medicine_name}>{best.medicine_name}</p>
+          <p className="mt-0.5 line-clamp-1 text-xs text-faint" title={best.medicine_name}>
+            {best.medicine_name}
+            {best.manufacturer && <> · by {best.manufacturer}</>}
+          </p>
           {href && (
             <a
               href={href}
@@ -106,6 +109,38 @@ function CheaperBrand({ alternatives, running }: { alternatives: AltResult | nul
     ) : null;
   }
 
+  if (alternatives && alternatives.matched_as === "salt") {
+    // A salt search has no "your brand" to beat: show the cheapest brand per tablet among those compared.
+    const perTab = [...alternatives.other_alternatives, ...alternatives.cheaper_alternatives]
+      .filter((a) => a.unit_landed_cost != null)
+      .sort((a, b) => (a.unit_landed_cost ?? 0) - (b.unit_landed_cost ?? 0))[0];
+    const compared = alternatives.other_alternatives.length + alternatives.cheaper_alternatives.length;
+    return (
+      <>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-hit">Cheapest per tablet</div>
+        {perTab ? (
+          <>
+            <p className="mt-2 text-xl font-semibold">
+              {perTab.brand} at <span className="tnum">{perTab.pack_estimated ? "~" : ""}{inr(perTab.unit_landed_cost)}</span> a tablet
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              {perTab.manufacturer && <>by {perTab.manufacturer} · </>}
+              {compared} brand{compared === 1 ? "" : "s"} of {alternatives.composition.name} compared
+            </p>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-muted">Pack sizes are missing, so brands are compared on the total price.</p>
+        )}
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-faint">
+          <Stethoscope className="h-3.5 w-3.5" /> Same salt and strength. Ask your doctor or pharmacist which brand suits you.
+        </p>
+        <a href="#alternatives" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-hit hover:underline">
+          See every brand <ArrowDown className="h-3.5 w-3.5" />
+        </a>
+      </>
+    );
+  }
+
   const top = alternatives?.cheaper_alternatives[0];
   if (!alternatives || !top) {
     return (
@@ -114,7 +149,7 @@ function CheaperBrand({ alternatives, running }: { alternatives: AltResult | nul
         <p className="mt-2 text-sm text-muted">
           {alternatives
             ? "No brand with the same salt is cheaper online right now."
-            : "This medicine isn't in our checked list of brands, so we don't suggest substitutes."}
+            : "We couldn't identify this medicine's salt, so we don't suggest substitutes."}
         </p>
       </>
     );
@@ -136,6 +171,7 @@ function CheaperBrand({ alternatives, running }: { alternatives: AltResult | nul
           </span>
         )}
         {alternatives.composition.active_ingredient}
+        {top.manufacturer && <> · by {top.manufacturer}</>}
       </p>
       <p className="mt-2 flex items-center gap-1.5 text-xs text-faint">
         <Stethoscope className="h-3.5 w-3.5" /> Ask your doctor or pharmacist before switching brands.

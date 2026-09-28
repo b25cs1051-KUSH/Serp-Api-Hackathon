@@ -108,7 +108,18 @@ def _summary_line(summary: dict | None) -> str:
             f"{summary['semantic_hits']} semantic) · {summary['total_ms'] / 1000:.1f} s")
 
 
+def _choose_markdown(r: dict) -> str:
+    c = r["choose"]
+    lines = [f"## Which {c['query']}?", "",
+             "This medicine comes in more than one strength or form, so nothing was searched yet (0 credits).",
+             "Ask the user which one is on their prescription, then call search_medicine again with it:", ""]
+    lines += [f"- {o['label']}: search `{o['query']}`" for o in c["options"]]
+    return "\n".join(lines)
+
+
 def _search_markdown(r: dict) -> str:
+    if r.get("choose"):
+        return _choose_markdown(r)
     out = [f"## {r['query']}: delivered prices to PIN {r['pincode']}", ""]
     if r["error"]:
         out += [f"> **Search incomplete ({r['error']['code']}):** {r['error']['message']}", ""]
@@ -136,26 +147,33 @@ def _search_markdown(r: dict) -> str:
         out.append("### Generic alternatives\nNot in the composition catalogue, so no substitutes were searched.")
     else:
         comp = alts.get("composition") or {}
-        out.append(f"### Generic alternatives: {comp.get('active_ingredient') or comp.get('name', '')}")
+        title = "Brands of" if alts.get("matched_as") == "salt" else "Generic alternatives:"
+        out.append(f"### {title} {comp.get('name') or comp.get('active_ingredient', '')}")
         ref = alts.get("reference")
         if ref:
             unit = f", {_inr(ref['unit_landed_cost'])}/tablet" if ref.get("unit_landed_cost") is not None else ""
             out.append(f"Reference: {_cell(ref.get('medicine_name'))} at {_inr(ref.get('total_landed_cost'))}{unit}.")
         cheaper = alts.get("cheaper_alternatives") or []
         if cheaper:
-            out += ["", "| Brand | Pharmacy | You pay | Per tablet | Pack | Saving |", "|---|---|---|---|---|---|"]
+            out += ["", "| Brand | Maker | Pharmacy | You pay | Per tablet | Pack | Saving |", "|---|---|---|---|---|---|---|"]
             for a in cheaper:
                 basis = "/tablet" if a.get("price_basis") == "per_tablet" else ""
                 approx = "≈" if a.get("estimated") else ""
                 saving = (f"{approx}{a['savings_pct']}% ({_inr(a.get('savings'))}{basis})"
                           if a.get("savings_pct") is not None else "—")
-                out.append(f"| {_cell(a.get('brand'))} | {_cell(a.get('platform'))} | {_inr(a.get('total_landed_cost'))} | "
-                           f"{_inr(a.get('unit_landed_cost'))} | {_pack(a)} | {saving} |")
+                out.append(f"| {_cell(a.get('brand'))} | {_cell(a.get('manufacturer'))} | {_cell(a.get('platform'))} | "
+                           f"{_inr(a.get('total_landed_cost'))} | {_inr(a.get('unit_landed_cost'))} | {_pack(a)} | {saving} |")
             out.append("\n~ = pack size estimated, ≈ = saving depends on it.")
+        elif alts.get("matched_as") == "salt" and alts.get("other_alternatives"):
+            out += ["", "| Brand | Maker | Pharmacy | You pay | Per tablet | Pack |", "|---|---|---|---|---|---|"]
+            for a in alts["other_alternatives"]:
+                out.append(f"| {_cell(a.get('brand'))} | {_cell(a.get('manufacturer'))} | {_cell(a.get('platform'))} | "
+                           f"{_inr(a.get('total_landed_cost'))} | {_inr(a.get('unit_landed_cost'))} | {_pack(a)} |")
+            out.append("\nSorted by price per tablet. ~ = pack size estimated.")
         else:
             out.append("No cheaper substitute found online right now.")
         if alts.get("not_found"):
-            out.append(f"Not sold online at the moment: {', '.join(alts['not_found'])}.")
+            out.append(f"Searched, but not sold online here right now: {', '.join(alts['not_found'])}.")
 
     out += ["", "### Run", _summary_line(r["summary"])]
     return "\n".join(out)
@@ -163,8 +181,8 @@ def _search_markdown(r: dict) -> str:
 
 _LISTING_KEYS = ("rank", "platform", "medicine_name", "price_inr", "delivery_fee", "delivery_status",
                  "delivery_label", "total_landed_cost", "estimated_days", "is_cheapest")
-_ALT_KEYS = ("brand", "medicine_name", "platform", "total_landed_cost", "unit_landed_cost", "pack_size",
-             "pack_estimated", "savings", "savings_pct", "price_basis", "estimated")
+_ALT_KEYS = ("brand", "manufacturer", "medicine_name", "platform", "total_landed_cost", "unit_landed_cost", "pack_size",
+             "pack_estimated", "savings", "savings_pct", "price_basis", "estimated", "widely_stocked")
 
 
 def _pick(row: dict | None, keys) -> dict | None:
@@ -178,13 +196,17 @@ def _pick(row: dict | None, keys) -> dict | None:
 
 
 def _search_json(r: dict) -> str:
+    if r.get("choose"):
+        return json.dumps({"query": r["query"], "choose": r["choose"], "summary": r["summary"]}, ensure_ascii=False)
     alts = r["alternatives"]
     if alts:
         alts = {
             "composition": alts.get("composition"),
+            "matched_as": alts.get("matched_as"),
             "matched_by": alts.get("matched_by"),
             "reference": _pick(alts.get("reference"), _ALT_KEYS),
             "cheaper_alternatives": [_pick(a, _ALT_KEYS) for a in alts.get("cheaper_alternatives") or []],
+            "other_alternatives": [_pick(a, _ALT_KEYS) for a in alts.get("other_alternatives") or []],
             "not_found": alts.get("not_found") or [],
         }
     return json.dumps({
@@ -226,8 +248,9 @@ async def search_medicine(
     """Find where a medicine is cheapest in India once delivery is included, and cheaper generics.
 
     Searches Google Shopping (via SerpApi) for the medicine, adds each pharmacy's delivery fee for the
-    PIN code, and ranks listings by the total the buyer pays. If the medicine is in the composition
-    catalogue, it also searches brands with the same salt and strength and reports per-tablet savings.
+    PIN code, and ranks listings by the total the buyer pays. Works with a brand ("Stamlo 5") or a salt
+    ("Gliclazide 80mg"); brands with the same salt, strength and form (from a 246,000-medicine index)
+    are compared per tablet. A name without a strength ("paracetamol") returns the choices first, free.
     A new medicine costs up to ~12 SerpApi credits and ~10-60 s; repeat or similar searches come from
     cache for 0 credits in well under a second. Reports progress as stages finish.
     """

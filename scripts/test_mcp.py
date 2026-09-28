@@ -108,8 +108,8 @@ async def part1_in_memory():
             check("search ok", r.is_error, False)
             check("markdown heading", md.startswith("## Stamlo 5: delivered prices to PIN 110001"), True)
             check("cheapest line", "Cheapest delivered: **₹66.02** at Chemist180" in md, True)
-            check("generic row", "| Amlokind 5 | Chemist180 | ₹19.41 | ₹1.94 | ~10 (est.) | ≈70.6% (₹4.66/tablet) |" in md, True)
-            check("not found listed", "Not sold online at the moment: Amtas 5." in md, True)
+            check("generic row", "| Amlokind 5 | — | Chemist180 | ₹19.41 | ₹1.94 | ~10 (est.) | ≈70.6% (₹4.66/tablet) |" in md, True)
+            check("not found listed", "Searched, but not sold online here right now: Amtas 5." in md, True)
             check("run line", "3 SerpApi lookups · 1 credit spent · 2 served from cache (1 exact, 1 semantic)" in md, True)
             check("no page tokens leak", "tok-123" in md, False)
             check("resolve_links passed as False", calls_made[-1], ("Stamlo 5", "110001", False))
@@ -139,6 +139,14 @@ async def part1_in_memory():
             md = text(r)
             check("partial result kept on failure", (r.is_error, "Search incomplete (pipeline_error)" in md,
                                                      "₹66.02" in md), (False, True, True))
+
+            def choose_stub(query, pincode, resolve_links=True, use_llm=True, verbose=False):
+                yield "choose", {"query": query, "reason": "strength not given",
+                                 "options": [{"label": "Paracetamol 650mg tablet", "query": "Paracetamol 650mg", "comp_key": "k"}]}
+            api.search_medicine_stream = choose_stub
+            r = await client.call_tool("search_medicine", {"query": "paracetamol", "pincode": "110001"})
+            check("needs a strength: options, not an error", (r.is_error, text(r).startswith("## Which paracetamol?"),
+                                                             "`Paracetamol 650mg`" in text(r)), (False, True, True))
 
             r = await client.call_tool("cache_stats", {})
             md = text(r)

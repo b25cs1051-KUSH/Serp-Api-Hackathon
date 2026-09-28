@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { API_URL, type AltResult, type Call, type DoneSummary, type Listing } from "./api";
+import { API_URL, type AltResult, type ChooseOptions, type Call, type DoneSummary, type Listing } from "./api";
 
 export type Stage = { name: string; at_ms: number };
 
@@ -14,7 +14,8 @@ export interface SearchState {
   stages: Stage[];
   listings: Listing[] | null;
   linksResolved: boolean;
-  alternatives: AltResult | null | undefined; // undefined = not arrived yet, null = not in formulary
+  alternatives: AltResult | null | undefined; // undefined = not arrived yet, null = not in the medicine index
+  choose: ChooseOptions | null; // set when the search needs a strength first; nothing else follows
   done: DoneSummary | null;
   error: string | null;
   startedAt: number;
@@ -30,6 +31,7 @@ const initial: SearchState = {
   listings: null,
   linksResolved: false,
   alternatives: undefined,
+  choose: null,
   done: null,
   error: null,
   startedAt: 0,
@@ -67,6 +69,10 @@ export function useSearch(onFinished?: () => void) {
           })),
         );
       }
+
+      on<ChooseOptions & { at_ms: number }>("choose", (d) =>
+        setState((s) => ({ ...s, choose: { query: d.query, reason: d.reason, options: d.options }, stages: [...s.stages, { name: "choose", at_ms: d.at_ms }] })),
+      );
 
       on<{ at_ms: number; result: AltResult | null }>("alternatives", (d) =>
         setState((s) => ({ ...s, alternatives: d.result, stages: [...s.stages, { name: "alternatives", at_ms: d.at_ms }] })),

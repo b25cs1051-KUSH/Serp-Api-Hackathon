@@ -4,6 +4,7 @@ import { Coins, Cpu, Link2, Loader2, MapPin, Repeat, Search, ShoppingBag } from 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Alternatives from "@/components/Alternatives";
 import AnswerCard from "@/components/AnswerCard";
+import ChooseCard from "@/components/ChooseCard";
 import CacheExplorer from "@/components/CacheExplorer";
 import CacheFlow from "@/components/CacheFlow";
 import CacheLab from "@/components/CacheLab";
@@ -210,15 +211,27 @@ export default function Home() {
       {state.status !== "idle" && !engine && (
         <section className="space-y-5">
           {state.error && <div className="card border-bad/40 p-4 text-sm text-bad">{state.error}</div>}
-          {!(state.status === "error" && state.listings === null) && (
+          {state.choose ? (
+            <ChooseCard choose={state.choose} onPick={submit} />
+          ) : (
             <>
-              <AnswerCard query={state.query} listings={state.listings} alternatives={state.alternatives} running={running} />
-              <Results listings={state.listings} query={state.query} pincode={state.pincode} linksResolved={state.linksResolved} wantLinks={state.links} />
+              {state.alternatives && state.alternatives.matched_by !== "exact" && (
+                <p className="text-sm text-muted">
+                  Showing results for <span className="font-medium text-ink">{state.alternatives.matched_brand ?? state.alternatives.composition.name}</span>{" "}
+                  (you typed &ldquo;{state.query}&rdquo;).
+                </p>
+              )}
+              {!(state.status === "error" && state.listings === null) && (
+                <>
+                  <AnswerCard query={state.query} listings={state.listings} alternatives={state.alternatives} running={running} />
+                  <Results listings={state.listings} query={state.query} pincode={state.pincode} linksResolved={state.linksResolved} wantLinks={state.links} />
+                </>
+              )}
+              <div id="alternatives" className="scroll-mt-4">
+                <Alternatives result={state.alternatives} running={running} />
+              </div>
             </>
           )}
-          <div id="alternatives" className="scroll-mt-4">
-            <Alternatives result={state.alternatives} running={running} />
-          </div>
         </section>
       )}
 
@@ -226,10 +239,16 @@ export default function Home() {
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <div className="space-y-5">
             {state.error && <div className="card border-bad/40 p-4 text-sm text-bad">{state.error}</div>}
-            {!(state.status === "error" && state.listings === null) && (
-              <Results listings={state.listings} query={state.query} pincode={state.pincode} linksResolved={state.linksResolved} wantLinks={state.links} />
+            {state.choose ? (
+              <ChooseCard choose={state.choose} onPick={submit} />
+            ) : (
+              <>
+                {!(state.status === "error" && state.listings === null) && (
+                  <Results listings={state.listings} query={state.query} pincode={state.pincode} linksResolved={state.linksResolved} wantLinks={state.links} />
+                )}
+                <Alternatives result={state.alternatives} running={running} />
+              </>
             )}
-            <Alternatives result={state.alternatives} running={running} />
           </div>
           <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
             <UnderTheHood state={state} />
@@ -300,7 +319,7 @@ export default function Home() {
       </section>
 
       <section className="mt-16">
-        <SectionTitle eyebrow="Redis" title="What is cached right now" sub="Raw SerpApi responses, product-page lookups and Gemini substitute decisions, each with its own TTL." />
+        <SectionTitle eyebrow="Redis" title="What is cached right now" sub="Raw SerpApi responses, product-page lookups and Gemini spelling decisions, each with its own TTL." />
         <CacheExplorer data={entries} onRefresh={refresh} />
       </section>
       </>
@@ -321,7 +340,7 @@ export default function Home() {
       )}
 
       <footer className="mt-20 border-t border-line pt-6 text-xs text-faint">
-        PharmaWatch · prices from Google Shopping via SerpApi · delivery rules per platform and PIN zone · generics limited to compositions.md. Not medical advice.
+        PharmaWatch · prices from Google Shopping via SerpApi · delivery rules per platform and PIN zone · substitutes limited to the same salt, strength and form (Indian Medicine Dataset, MIT). Not medical advice.
       </footer>
     </main>
   );

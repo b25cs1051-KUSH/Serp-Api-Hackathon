@@ -32,6 +32,7 @@ export interface Listing {
   rank?: number;
   thumbnail?: string;
   pincode_zone?: string;
+  manufacturer?: string;
 }
 
 export interface Alternative extends Listing {
@@ -44,21 +45,29 @@ export interface Alternative extends Listing {
   price_basis?: "per_tablet" | "total";
   is_cheaper?: boolean;
   estimated?: boolean;
+  widely_stocked?: boolean;
 }
 
 export interface AltResult {
   query: string;
-  composition: { name: string; active_ingredient: string; drug_class: string; brands: string[] };
+  composition: { name: string; active_ingredient: string; drug_class: string; brands: string[]; brand_count?: number };
   suggested_alternatives: string[];
   matched_as: "brand" | "salt";
   matched_brand: string | null;
-  matched_by: "exact" | "gemini";
+  matched_by: "exact" | "fuzzy" | "gemini";
   match_reason: string;
   reference: Alternative | null;
   cheaper_alternatives: Alternative[];
   other_alternatives: Alternative[];
   not_found: string[];
   timings?: Record<string, number>;
+}
+
+/** The search named a salt or brand without its strength: pick one before anything is searched. */
+export interface ChooseOptions {
+  query: string;
+  reason: string;
+  options: { label: string; query: string }[];
 }
 
 export interface DoneSummary {
