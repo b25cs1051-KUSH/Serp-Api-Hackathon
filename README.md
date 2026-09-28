@@ -102,6 +102,9 @@ Each lookup goes through up to three steps:
 
 On top of that:
 
+- **Same params only.** A semantic hit is only served from an entry fetched with the same other params
+  (page, filters, language, `json_restrictor`), checked by a stored hash of those params. The embedding
+  only sees the query text, so without this "Dolo 650, page 2" could get page 1's results.
 - **`exact_only=True`** skips step 2. Catalogue brand names are always searched this way (see
   [problem 1](#1-a-semantic-cache-cant-tell-two-brands-apart)).
 - **Background writes.** A search that calls SerpApi returns immediately; the Redis write happens on a

@@ -293,10 +293,11 @@ def cache_lab(
            f"{lab['compared_against']} cached queries · exact lookup {t['exact_lookup']} ms, embed {t['embed']} ms, "
            f"scan {t['scan']} ms", ""]
     if lab["nearest"]:
-        out += ["| Cached query | Similarity | ≥ threshold | Dosage guard |", "|---|---|---|---|"]
+        out += ["| Cached query | Similarity | ≥ threshold | Same params | Dosage guard |", "|---|---|---|---|---|"]
         for c in lab["nearest"]:
             out.append(f"| {_cell(c['query_text'].split(' | ')[0])} | {c['similarity']:.3f} | "
-                       f"{'yes' if c['above_threshold'] else 'no'} | {'BLOCKS' if c['dosage_guard_blocks'] else '—'} |")
+                       f"{'yes' if c['above_threshold'] else 'no'} | {'yes' if c['same_params'] else 'NO'} | "
+                       f"{'BLOCKS' if c['dosage_guard_blocks'] else '—'} |")
     else:
         out.append("No cached price searches to compare against.")
     return "\n".join(out)

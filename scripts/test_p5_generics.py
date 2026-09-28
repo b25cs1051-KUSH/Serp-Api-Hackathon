@@ -31,6 +31,7 @@ from pharmawatch.generics import (
 )
 from serpapi_cache import SerpApiCache
 from serpapi_cache.backends import BaseBackend
+from serpapi_cache.cache import _params_signature
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -48,8 +49,9 @@ class DictBackend(BaseBackend):
     def __init__(self):
         self.rows = {}
 
-    def set(self, key, value, embedding, ttl, query_text=""):
-        self.rows[key] = {"key": key, "value": value, "embedding": embedding, "query_text": query_text}
+    def set(self, key, value, embedding, ttl, query_text="", params_sig=""):
+        self.rows[key] = {"key": key, "value": value, "embedding": embedding, "query_text": query_text,
+                          "params_sig": params_sig or None}
 
     def get_all(self):
         return list(self.rows.values())
@@ -79,6 +81,37 @@ def check_exact_only_cache() -> list:
         check("Semantic mode reuses a similar name", cache.search({**shop, "q": "Dola 650 price"})["q"], "Dolo 650 price"),
         check("exact_only never does", cache.search({**shop, "q": "Dola 650 price"}, exact_only=True)["q"], "Dola 650 price"),
         check("exact_only hits its own name", cache.search({**shop, "q": "dola  650 PRICE"}, exact_only=True)["q"], "Dola 650 price"),
+    ]
+
+
+def check_params_signature() -> list:
+    """A semantic hit needs the same non-query params: page, filter, language, json_restrictor."""
+    backend = DictBackend()
+    cache = SerpApiCache(api_key="offline", backend=backend, similarity_threshold=0.5, verbose=False)
+    cache._load_model = lambda: None
+    cache._embed = lambda text: [1.0, 0.0]                      # every query "identical" semantically
+    cache._call_serpapi = lambda params: {"q": params["q"], "p": {k: v for k, v in params.items() if k != "q"}}
+    shop = {"engine": "google_shopping", "gl": "in", "json_restrictor": "shopping_results[].{title,price}"}
+    cache.search({**shop, "q": "Dolo 650 price"})
+
+    def served(extra, q="Dola 650 price"):
+        return cache.search({**shop, **extra, "q": q})["q"]
+
+    legacy = DictBackend()   # an entry stored before signatures existed
+    legacy.set("old", {"q": "Dolo 650 price"}, [1.0, 0.0], 0, "dolo 650 price | engine:google_shopping")
+    old = SerpApiCache(api_key="offline", backend=legacy, similarity_threshold=0.5, verbose=False)
+    old._load_model = lambda: None
+    old._embed = lambda text: [1.0, 0.0]
+    old._call_serpapi = lambda params: {"q": params["q"]}
+    return [
+        check("Same params, reworded query: semantic hit", served({}), "Dolo 650 price"),
+        check("Different json_restrictor: no reuse", served({"json_restrictor": "shopping_results[].{title}"}), "Dola 650 price"),
+        check("No json_restrictor: no reuse", cache.search({"engine": "google_shopping", "gl": "in", "q": "Dolx 650 price"})["q"], "Dolx 650 price"),
+        check("Page 2 (start=10): no reuse", served({"start": 10}, "Dolz 650 price"), "Dolz 650 price"),
+        check("Other language (hl=hi): no reuse", served({"hl": "hi"}, "Dolq 650 price"), "Dolq 650 price"),
+        check("Signature stored with the entry", all(r["params_sig"] for r in backend.get_all()), True),
+        check("api_key never changes the signature", _params_signature({**shop, "api_key": "a"}) == _params_signature(shop), True),
+        check("Entry without a signature: no semantic reuse", old.search({"engine": "google_shopping", "gl": "in", "q": "Dola 650 price"})["q"], "Dola 650 price"),
     ]
 
 
@@ -368,6 +401,7 @@ def run_checks() -> bool:
         check("Stores without links ignored", pick_store_link([{"name": "1mg"}], "1mg"), None),
     ]
     results += check_exact_only_cache()
+    results += check_params_signature()
     results += check_async_store()
     results += check_parallel_pipeline()
     results += check_stamlo_pipeline()

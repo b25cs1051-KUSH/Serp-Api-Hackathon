@@ -35,10 +35,14 @@ def say(message: str = "") -> None:
 # ─────────────────────────────────────────────
 
 class BaseBackend(ABC):
-    """Abstract cache backend. Stores (value, embedding, query_text) pairs keyed by hash."""
+    """
+    Abstract cache backend. Stores (value, embedding, query_text, params_sig) keyed by hash.
+    get_all() records carry params_sig (None if stored without one): semantic hits require a match.
+    """
 
     @abstractmethod
-    def set(self, key: str, value: Any, embedding: list[float], ttl: int, query_text: str = "") -> None: ...
+    def set(self, key: str, value: Any, embedding: list[float], ttl: int, query_text: str = "",
+            params_sig: str = "") -> None: ...
 
     @abstractmethod
     def get_all(self) -> list[dict]: ...
@@ -64,10 +68,11 @@ class RedisBackend(BaseBackend):
     """
     Redis-backed cache. Persistent across restarts, supports TTL natively.
 
-    Each entry is stored as three Redis keys:
+    Each entry is stored as four Redis keys:
       - serpapi:cache:<hash>:value     → JSON-serialized API result
       - serpapi:cache:<hash>:embedding → JSON-serialized float list
       - serpapi:cache:<hash>:query     → original query text (for dosage guard)
+      - serpapi:cache:<hash>:params    → signature of the non-query params (semantic hits need a match)
 
     An index key `serpapi:cache:index` (Redis Set) tracks all active hashes
     so we can retrieve all embeddings for similarity comparison.
@@ -104,15 +109,21 @@ class RedisBackend(BaseBackend):
     def _qry_key(self, key: str) -> str:
         return f"{self.PREFIX}{key}:query"
 
-    def set(self, key: str, value: Any, embedding: list[float], ttl: int, query_text: str = "") -> None:
+    def _sig_key(self, key: str) -> str:
+        return f"{self.PREFIX}{key}:params"
+
+    def set(self, key: str, value: Any, embedding: list[float], ttl: int, query_text: str = "",
+            params_sig: str = "") -> None:
         pipe = self._r.pipeline()
         pipe.set(self._val_key(key), json.dumps(value))
         pipe.set(self._emb_key(key), json.dumps(embedding))
         pipe.set(self._qry_key(key), query_text)
+        pipe.set(self._sig_key(key), params_sig)
         if ttl > 0:
             pipe.expire(self._val_key(key), ttl)
             pipe.expire(self._emb_key(key), ttl)
             pipe.expire(self._qry_key(key), ttl)
+            pipe.expire(self._sig_key(key), ttl)
         pipe.sadd(self.INDEX_KEY, key)
         pipe.execute()
 
@@ -132,6 +143,7 @@ class RedisBackend(BaseBackend):
                 "value": json.loads(val),
                 "embedding": json.loads(emb),
                 "query_text": self._r.get(self._qry_key(key)) or "",
+                "params_sig": self._r.get(self._sig_key(key)) or None,
             })
         if dead_keys:
             self._r.srem(self.INDEX_KEY, *dead_keys)
@@ -146,6 +158,7 @@ class RedisBackend(BaseBackend):
         pipe.delete(self._val_key(key))
         pipe.delete(self._emb_key(key))
         pipe.delete(self._qry_key(key))
+        pipe.delete(self._sig_key(key))
         pipe.srem(self.INDEX_KEY, key)
         pipe.execute()
 
@@ -157,6 +170,7 @@ class RedisBackend(BaseBackend):
                 pipe.delete(self._val_key(key))
                 pipe.delete(self._emb_key(key))
                 pipe.delete(self._qry_key(key))
+                pipe.delete(self._sig_key(key))
             pipe.delete(self.INDEX_KEY)
             pipe.execute()
 

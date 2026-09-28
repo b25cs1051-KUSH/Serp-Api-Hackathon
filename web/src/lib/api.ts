@@ -118,7 +118,7 @@ export interface LabResult {
   credits: number;
   compared_against: number;
   timings_ms: { exact_lookup: number; embed: number; scan: number };
-  nearest: { query_text: string; similarity: number; above_threshold: boolean; dosage_guard_blocks: boolean }[];
+  nearest: { query_text: string; similarity: number; above_threshold: boolean; dosage_guard_blocks: boolean; same_params: boolean }[];
 }
 
 export interface CacheEntries {

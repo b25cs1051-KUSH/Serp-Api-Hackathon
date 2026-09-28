@@ -104,6 +104,16 @@ def _cache_params(params: dict) -> dict:
     return {**params, "q": _normalize_q(params["q"])}
 
 
+def _params_signature(params: dict) -> str:
+    """
+    Hash of every param except the query text. The embedding only sees q, engine, location and
+    country, so without this a semantic hit could hand back a result fetched with a different page
+    (start), filter (tbs), language (hl) or json_restrictor. A semantic hit needs the same signature.
+    """
+    rest = {k: v for k, v in params.items() if k not in ("q", "api_key")}
+    return hashlib.sha256(json.dumps(rest, sort_keys=True).encode()).hexdigest()[:16]
+
+
 # ─────────────────────────────────────────────
 # Main Cache Class
 # ─────────────────────────────────────────────
@@ -242,6 +252,7 @@ class SerpApiCache:
         key_params = _cache_params(params)
         query_text = self._params_to_query_string(key_params)
         cache_key = self._make_key(key_params)
+        params_sig = _params_signature(key_params)
 
         # 0. Exact match — identical params were asked before. One Redis GET,
         #    no embedding, no similarity scan.
@@ -264,7 +275,7 @@ class SerpApiCache:
         embedding = self._embed(query_text) if use_semantic else None  # exact_only: embed at store time
 
         # 1. Check for semantic match in cache
-        best_match = self._find_best_match(embedding, query_text) if use_semantic else None
+        best_match = self._find_best_match(embedding, query_text, params_sig) if use_semantic else None
 
         if best_match:
             similarity, matched_key = best_match
@@ -285,7 +296,7 @@ class SerpApiCache:
 
         # 3. Store result + embedding + query_text — in the background
         effective_ttl = ttl if ttl is not None else self.default_ttl
-        self._store_async(cache_key, result, embedding, effective_ttl, query_text, is_text_query)
+        self._store_async(cache_key, result, embedding, effective_ttl, query_text, is_text_query, params_sig)
 
         return "api_call", result
 
@@ -351,7 +362,7 @@ class SerpApiCache:
     # ─────────────────────────────────────────────
 
     def _store_async(self, key: str, result: dict, embedding: Optional[list[float]],
-                     ttl: int, query_text: str, is_text_query: bool) -> None:
+                     ttl: int, query_text: str, is_text_query: bool, params_sig: str = "") -> None:
         if embedding is None and is_text_query:
             # Load the model here, not on the writer: a first-time import during interpreter
             # shutdown fails and the write is lost. No-op after warm_up().
@@ -360,7 +371,7 @@ class SerpApiCache:
         def store():
             try:
                 vector = embedding if embedding is not None else (self._embed(query_text) if is_text_query else [])
-                self.backend.set(key, result, vector, ttl, query_text)
+                self.backend.set(key, result, vector, ttl, query_text, params_sig=params_sig)
             except Exception as e:  # a failed store only costs a future cache hit
                 say(f"⚠️  Cache store failed for '{query_text[:60]}': {e}")
 
@@ -400,9 +411,11 @@ class SerpApiCache:
         with self._model_lock:
             return self._model.encode(text, normalize_embeddings=True).tolist()
 
-    def _find_best_match(self, query_embedding: list[float], query_text: str) -> Optional[tuple[float, str]]:
+    def _find_best_match(self, query_embedding: list[float], query_text: str,
+                         params_sig: str) -> Optional[tuple[float, str]]:
         """
-        Compare query embedding against all cached embeddings.
+        Compare query embedding against cached embeddings fetched with the same other params
+        (params_sig). Entries stored without a signature are never semantic candidates.
         Applies dosage guard after finding the best cosine candidate.
         Returns (similarity_score, cache_key) if above threshold and guard passes, else None.
         """
@@ -417,6 +430,8 @@ class SerpApiCache:
         for record in records:
             if not record["embedding"]:
                 continue  # token-only entry (product link) — exact-match only
+            if record.get("params_sig") != params_sig:
+                continue  # different page / filter / language / json_restrictor, or unknown
             score = _cosine_similarity(query_embedding, record["embedding"])
             if score > best_score:
                 best_score = score

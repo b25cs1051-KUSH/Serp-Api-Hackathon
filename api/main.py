@@ -61,7 +61,7 @@ load_dotenv()
 
 # Cache internals used by the lab endpoint. If serpapi_cache renames them, only the lab is disabled.
 try:
-    from serpapi_cache.cache import _cache_params, _cosine_similarity, _dosage_guard_fires
+    from serpapi_cache.cache import _cache_params, _cosine_similarity, _dosage_guard_fires, _params_signature
     _LAB_AVAILABLE = True
 except ImportError:
     _LAB_AVAILABLE = False
@@ -550,6 +550,7 @@ def cache_lab(q: str = Query(..., min_length=1, max_length=120), top: int = Quer
     key_params = _cache_params(params)
     query_text = cache._params_to_query_string(key_params)
     key = cache._make_key(key_params)
+    params_sig = _params_signature(key_params)
 
     t = time.perf_counter()
     exact = bool(r.exists(f"{RedisBackend.PREFIX}{key}:value"))
@@ -565,10 +566,11 @@ def cache_lab(q: str = Query(..., min_length=1, max_length=120), top: int = Quer
     for k in keys:
         pipe.get(f"{RedisBackend.PREFIX}{k}:embedding")
         pipe.get(f"{RedisBackend.PREFIX}{k}:query")
+        pipe.get(f"{RedisBackend.PREFIX}{k}:params")
     raw = pipe.execute()
     candidates = []
     for i, k in enumerate(keys):
-        emb, text = raw[2 * i], raw[2 * i + 1] or ""
+        emb, text, sig = raw[3 * i], raw[3 * i + 1] or "", raw[3 * i + 2]
         vec = json.loads(emb) if emb else []
         if not vec:
             continue  # token-only / LLM decision entries: exact-match only
@@ -578,15 +580,20 @@ def cache_lab(q: str = Query(..., min_length=1, max_length=120), top: int = Quer
             "similarity": round(score, 4),
             "above_threshold": score >= cache.threshold,
             "dosage_guard_blocks": _dosage_guard_fires(query_text, text),
+            "same_params": sig == params_sig,
         })
     candidates.sort(key=lambda c: c["similarity"], reverse=True)
     scan_ms = (time.perf_counter() - t) * 1000
 
-    best = candidates[0] if candidates else None
+    # Same rule as SerpApiCache: only entries fetched with the same other params can be reused.
+    best = next((c for c in candidates if c["same_params"]), None)
+    closer_other = candidates[0] if candidates and not candidates[0]["same_params"] and candidates[0]["above_threshold"] else None
     if exact:
         decision, reason = "exact_hit", "Same normalized query is already cached — one Redis GET, no embedding"
-    elif best is None:
-        decision, reason = "api_call", "Nothing comparable in the cache yet"
+    elif best is None or (closer_other and not best["above_threshold"]):
+        decision, reason = "api_call", ("Closest cached query was fetched with different params (page, filter, "
+                                        "language or json_restrictor), so it can't be reused" if closer_other
+                                        else "Nothing comparable in the cache yet")
     elif not best["above_threshold"]:
         decision, reason = "api_call", f"Closest cached query scores {best['similarity']:.3f} < threshold {cache.threshold}"
     elif best["dosage_guard_blocks"]:
