@@ -80,6 +80,7 @@ def wait_idle(timeout=5):
 def run_checks() -> bool:
     client = TestClient(api.app)   # no `with`: skips the lifespan warm-up (model not needed here)
     real_pipeline = api.search_medicine_stream
+    real_prescription = api.prescription_stream
     results = []
     try:
         # ── health: shape, and keys never leave the server ───────────────
@@ -137,6 +138,66 @@ def run_checks() -> bool:
             check("choose: options sent", [o["query"] for o in choose.get("options", [])], ["Paracetamol 650mg"]),
             check("choose: no credit", dict(events)["done"]["credits_spent"], 0),
             check("json: choose field", (j["choose"]["options"][0]["query"], j["listings"]), ("Paracetamol 650mg", None)),
+        ]
+
+        # ── prescription: lines stream, one basket, page tokens never sent ──
+        seen_items = []
+
+        def rx_stub(lines, pincode, resolve_links=False, use_llm=True, verbose=False):
+            seen_items.append((lines, pincode))
+            log_call("line 1 main: Dolo 650", "api_call", True)
+            yield "line", {"line": 1, "query": "paracetamol", "status": "choose",
+                           "choose": {"query": "paracetamol", "reason": "strength not given", "options": []}}
+            yield "line", {"line": 0, "query": "Dolo 650", "status": "main", "listings": [listing("Dolo 650 Tablet", 26.32)]}
+            log_call("line 1: Paracip 650", "exact_hit", False)
+            yield "line", {"line": 0, "query": "Dolo 650", "status": "done", "listings": [listing("Dolo 650 Tablet", 26.32)],
+                           "alternatives": None, "tablets": 30, "tablets_how": "typed", "offers": 2}
+            plan = {"total": 41.82, "items_total": 41.82, "fees_total": 0.0,
+                    "stores": [{"platform": "Chemist180", "subtotal": 41.82, "fee": 0.0, "total": 41.82,
+                                "delivery_label": "FREE", "free_delivery": True,
+                                "lines": [{"line": 0, "brand": "Paracip 650", "page_token": "tok-secret", "item_cost": 41.82}]}]}
+            yield "basket", {"with_swaps": {"best": plan, "single_store": plan, "lines": [0]},
+                             "as_prescribed": {"best": None, "single_store": None, "lines": []},
+                             "saving": None, "saving_lines": [], "per_line": [
+                                 {"line": 0, "query": "Dolo 650", "cheapest_prescribed": None,
+                                  "cheapest_any": {"brand": "Paracip 650", "page_token": "tok-secret"}}],
+                             "unavailable": [], "skipped": [1], "stats": {"combinations": 1, "ms": 0.1}}
+        api.prescription_stream = rx_stub
+        items = json.dumps([{"q": " Dolo  650 ", "tablets": 30}, {"q": "paracetamol", "tablets": None}])
+        events = parse_sse(client.get("/api/prescription/stream", params={"items": items, "pincode": "110 001"}).text)
+        names = [n for n, _ in events if n != "call"]
+        data = dict(events)
+        j = client.get("/api/prescription", params={"items": items, "pincode": "110001"}).json()
+        results += [
+            check("rx: event order", names, ["start", "line", "line", "line", "basket", "done"]),
+            check("rx: lines cleaned + PIN normalised", seen_items[0],
+                  ([{"query": "Dolo 650", "tablets": 30}, {"query": "paracetamol", "tablets": None}], "110001")),
+            check("rx: start carries the items", data["start"]["items"][0]["query"], "Dolo 650"),
+            check("rx: basket total", data["basket"]["result"]["with_swaps"]["best"]["total"], 41.82),
+            check("rx: page tokens never sent", "tok-secret" in json.dumps(events) or "tok-123" in json.dumps(events), False),
+            check("rx: done sums every line's calls", (data["done"]["calls"], data["done"]["credits_spent"]), (2, 1)),
+            check("rx json: lines by number + basket", (sorted(j["lines"]), j["basket"]["skipped"], j["error"]), (["0", "1"], [1], None)),
+            check("rx: slot released", wait_idle(), 0),
+        ]
+        n_before = len(seen_items)
+        bad = {
+            "not json": "Dolo 650",
+            "empty list": "[]",
+            "9 lines": json.dumps([{"q": "Dolo 650"}] * 9),
+            "bad line 2": json.dumps([{"q": "Dolo 650"}, {"q": "1"}]),
+            "tablets 0": json.dumps([{"q": "Dolo 650", "tablets": 0}]),
+            "tablets text": json.dumps([{"q": "Dolo 650", "tablets": "ten"}]),
+        }
+        codes = {k: client.get("/api/prescription", params={"items": v, "pincode": "110001"}).json()["detail"]["code"]
+                 for k, v in bad.items()}
+        bad_pin = client.get("/api/prescription", params={"items": json.dumps([{"q": "Dolo 650"}]), "pincode": "12"})
+        results += [
+            check("rx: invalid input codes", codes, {"not json": "invalid_items", "empty list": "invalid_items",
+                                                      "9 lines": "invalid_items", "bad line 2": "invalid_query",
+                                                      "tablets 0": "invalid_tablets", "tablets text": "invalid_tablets"}),
+            check("rx: bad line names its number", "Line 2" in client.get("/api/prescription", params={"items": bad["bad line 2"]}).json()["detail"]["message"], True),
+            check("rx: bad PIN → 422", (bad_pin.status_code, bad_pin.json()["detail"]["code"]), (422, "invalid_pincode")),
+            check("rx: refused prescriptions never ran", len(seen_items), n_before),
         ]
 
         # ── bad input is refused before anything runs (0 credits) ─────────
@@ -229,6 +290,7 @@ def run_checks() -> bool:
         ]
     finally:
         api.search_medicine_stream = real_pipeline
+        api.prescription_stream = real_prescription
     return all(results)
 
 

@@ -210,7 +210,8 @@ def optimise(lines: List[dict], pincode) -> dict:
     Returns {
       "with_swaps":   {"best": plan | None, "single_store": plan | None},
       "as_prescribed":{"best": plan | None, "single_store": plan | None},
-      "saving": as_prescribed best total − with_swaps best total (or None),
+      "saving": as_prescribed best total − the swap basket's total for the same lines (or None),
+      "saving_lines": the lines that saving covers,
       "per_line": [{"line", "query", "tablets", "tablets_how", "cheapest_prescribed", "cheapest_any"}],
       "unavailable": [line indexes with no deliverable offer],
       "stats": {"combinations": int, "ms": float},
@@ -249,13 +250,23 @@ def optimise(lines: List[dict], pincode) -> dict:
                         "single_store": _single_store(choices, ids, fee),
                         "lines": ids}
 
-    ws, ap = result["with_swaps"]["best"], result["as_prescribed"]["best"]
-    comparable = ws and ap and result["with_swaps"]["lines"] == result["as_prescribed"]["lines"]
+    # Saving from swaps, on the lines the prescribed brands can cover (a brand nobody sells here
+    # can't be compared): the swap basket is re-optimised over exactly those lines.
+    saving, saving_lines = None, result["as_prescribed"]["lines"]
+    ap = result["as_prescribed"]["best"]
+    if ap and saving_lines:
+        by_line = {p["line"]: p for p in per_line}
+        choices = [_choices(by_line[i]["_offers"], len(by_line[i]["_offers"])) for i in saving_lines]
+        ws_same, n = _search(choices, fee)
+        tried += n
+        if ws_same:
+            saving = round(ap["total"] - _price(ws_same, fee)[0], 2)
     for p in per_line:
         p.pop("_offers")
     return {
         **result,
-        "saving": round(ap["total"] - ws["total"], 2) if comparable else None,
+        "saving": saving,
+        "saving_lines": saving_lines if saving is not None else [],
         "per_line": per_line,
         "unavailable": unavailable,
         "stats": {"combinations": tried, "ms": round((time.perf_counter() - t0) * 1000, 1)},

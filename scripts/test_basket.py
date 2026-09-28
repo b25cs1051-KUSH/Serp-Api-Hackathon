@@ -83,6 +83,12 @@ def run():
     check("as prescribed keeps the brand", r["as_prescribed"]["best"]["stores"][0]["lines"][0]["brand"], "Dolo 650")
     check("saving = difference", r["saving"], 12.38)
 
+    # 3b. The prescribed brand of one line isn't sold: saving is compared on the other lines only.
+    r = basket.optimise([line("Dolo 650", offer("Chemist180", 26.32), offer("Chemist180", 13.94, "Paracip 650", False)),
+                         line("Atorbest 10", offer("Chemist180", 21.39, "Torvason 10", False))], PIN)
+    check("saving over the lines both can cover", (r["saving"], r["saving_lines"]), (12.38, [0]))
+    check("swap basket still covers every line", r["with_swaps"]["best"]["total"], 35.33)
+
     # 4. A line nobody sells is reported, the rest is still optimised.
     r = basket.optimise([line("A", offer("Chemist180", 20)), line("Nothing")], PIN)
     check("unavailable line reported", r["unavailable"], [1])

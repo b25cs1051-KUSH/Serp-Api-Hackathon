@@ -151,7 +151,9 @@ def search_medicine_stream(
     search_q = query
     if resolution["kind"] in ("brand", "salt") and resolution.get("matched_by") == "fuzzy":
         search_q = resolution.get("brand") or resolution["label"]
-    main_future = _POOL.submit(_tagged, "main search", ranked_listings, search_q, pin, False, verbose)
+    # A brand the index knows is looked up by exact name only (similar brand + same dose ≠ same product).
+    exact = resolution["kind"] == "brand"
+    main_future = _POOL.submit(_tagged, "main search", ranked_listings, search_q, pin, exact, verbose, True)
     match_future: Optional[Future] = None
     match, match_known = None, True
     if resolution["kind"] == "candidates":           # spelling with several fixes: Gemini picks, in parallel

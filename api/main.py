@@ -10,6 +10,9 @@ This module only exposes them over HTTP and makes the cache observable:
                            finish + every SerpApi call live (exact / semantic / API call, ms)
   GET /api/search          the same search as one JSON response (422 bad input, 429 busy,
                            504 deadline, 502 pipeline error)
+  GET /api/prescription/stream  a whole prescription (up to 8 medicines) as Server-Sent Events:
+                           each line as it resolves and finishes, then the cheapest basket
+  GET /api/prescription    the same as one JSON response
   GET /api/cache/lab       "what would the cache do with this query?" — nearest cached
                            queries, cosine scores, dosage guard. 0 credits, read-only
   GET /api/cache/entries   what is in Redis right now, with TTLs
@@ -54,6 +57,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from pharmawatch.delivery_cost import normalize_pincode
 from pharmawatch.pipeline import search_medicine_stream
+from pharmawatch.prescription import MAX_LINES, prescription_stream
 from pharmawatch.search import SHOPPING_PARAMS, _get_cache, warm_up
 from serpapi_cache.backends import RedisBackend
 
@@ -73,6 +77,8 @@ _DEFAULT_MISS_MS = 7000  # used for "time saved" until this process has timed a 
 MAX_CONCURRENT_SEARCHES = int(os.getenv("MAX_CONCURRENT_SEARCHES", "4"))
 SEARCH_TIMEOUT_S = float(os.getenv("SEARCH_TIMEOUT_S", "90"))
 _QUERY_MIN, _QUERY_MAX = 2, 120
+_TABLETS_MAX = 500
+PRESCRIPTION_TIMEOUT_FACTOR = 1.5   # a prescription waits longer than one search (its lines run in parallel)
 
 log = logging.getLogger("pharmawatch.api")
 if not log.handlers:  # uvicorn configures its own loggers only; make ours visible too
@@ -161,6 +167,31 @@ def _clean_alternatives(result):
         out[key] = _clean_rows(out.get(key) or [])
     if out.get("reference"):
         out["reference"] = _clean_rows([out["reference"]])[0]
+    return out
+
+
+def _clean_line(payload: dict) -> dict:
+    out = dict(payload)
+    if "listings" in out:
+        out["listings"] = _clean_rows(out["listings"])
+    if out.get("alternatives"):
+        out["alternatives"] = _clean_alternatives(out["alternatives"])
+    return out
+
+
+def _clean_basket(result: dict) -> dict:
+    """The basket without page tokens (long, internal)."""
+    def offer(o):
+        return {k: v for k, v in o.items() if k != "page_token"} if o else o
+
+    out = json.loads(json.dumps(result, default=str))
+    for mode in ("with_swaps", "as_prescribed"):
+        for plan in (out[mode]["best"], out[mode]["single_store"]):
+            if plan:
+                for store in plan["stores"]:
+                    store["lines"] = [offer(o) for o in store["lines"]]
+    for p in out["per_line"]:
+        p["cheapest_prescribed"], p["cheapest_any"] = offer(p["cheapest_prescribed"]), offer(p["cheapest_any"])
     return out
 
 
@@ -275,10 +306,41 @@ def _validate(q: str, pincode: str) -> tuple[str, str]:
     return query, pin
 
 
-def _start_search(query: str, pin: str, links: bool, llm: bool) -> dict:
+def _validate_items(items: str, pincode: str) -> tuple[list, str]:
+    """
+    A prescription: JSON list of {"q": str, "tablets": int | null}, 1..MAX_LINES lines, each query
+    checked like a single search. SearchRejected(422) before anything runs.
+    """
+    try:
+        raw = json.loads(items)
+    except (TypeError, ValueError):
+        raise SearchRejected(422, "invalid_items", "items must be a JSON list of {q, tablets}.")
+    if not isinstance(raw, list) or not 1 <= len(raw) <= MAX_LINES:
+        raise SearchRejected(422, "invalid_items", f"Enter 1 to {MAX_LINES} medicines.")
+    lines, pin = [], None
+    for n, item in enumerate(raw, 1):
+        if not isinstance(item, dict):
+            raise SearchRejected(422, "invalid_items", f"Line {n}: expected {{q, tablets}}.")
+        try:
+            query, pin = _validate(str(item.get("q", "")), pincode)
+        except SearchRejected as e:
+            if e.code == "invalid_pincode":
+                raise
+            raise SearchRejected(422, "invalid_query", f"Line {n}: {e.message}")
+        tablets = item.get("tablets")
+        if tablets in (None, ""):
+            tablets = None
+        elif not isinstance(tablets, int) or isinstance(tablets, bool) or not 1 <= tablets <= _TABLETS_MAX:
+            raise SearchRejected(422, "invalid_tablets", f"Line {n}: tablets must be a whole number from 1 to {_TABLETS_MAX}.")
+        lines.append({"query": query, "tablets": tablets})
+    return lines, pin
+
+
+def _start_search(query: str, pin: str, links: bool, llm: bool, items: Optional[list] = None) -> dict:
     """
     Claim a slot (or SearchRejected 429) and start the pipeline on its own thread right away.
     The thread releases the slot when the pipeline ends, even if nobody is reading any more.
+    items: a prescription's lines; the whole prescription takes one slot.
     """
     if not _slots.acquire(blocking=False):
         raise SearchRejected(429, "busy", f"{MAX_CONCURRENT_SEARCHES} searches are already running. "
@@ -288,14 +350,17 @@ def _start_search(query: str, pin: str, links: bool, llm: bool) -> dict:
     with _session_lock:
         _session["searches"] += 1
 
-    handle = {"query": query, "pin": pin, "links": links, "llm": llm,
+    handle = {"query": query, "pin": pin, "links": links, "llm": llm, "items": items,
+              "timeout": SEARCH_TIMEOUT_S * (PRESCRIPTION_TIMEOUT_FACTOR if items else 1),
               "t0": time.perf_counter(), "stages": queue.Queue()}
     with _running_lock:
         _readers[id(handle)] = handle["t0"]
 
     def run():
         try:
-            for name, payload in search_medicine_stream(query, pin, resolve_links=links, use_llm=llm):
+            stream = (prescription_stream(items, pin, resolve_links=links, use_llm=llm) if items
+                      else search_medicine_stream(query, pin, resolve_links=links, use_llm=llm))
+            for name, payload in stream:
                 handle["stages"].put((name, payload))
             handle["stages"].put(("__done__", None))
         except Exception as e:
@@ -318,7 +383,7 @@ def _prune_call_log(cache) -> None:
     now = time.perf_counter()
     with _running_lock:
         for key, t0 in list(_readers.items()):
-            if now - t0 > SEARCH_TIMEOUT_S + 30:
+            if now - t0 > SEARCH_TIMEOUT_S * PRESCRIPTION_TIMEOUT_FACTOR + 30:
                 del _readers[key]
         cutoff = min(_readers.values(), default=now)
     with cache._log_lock:
@@ -371,7 +436,10 @@ def _search_events(handle: dict) -> Iterator[tuple[str, object]]:
         return out
 
     try:
-        yield "start", {"query": handle["query"], "pincode": handle["pin"], "links": handle["links"], "llm": handle["llm"]}
+        start = {"query": handle["query"], "pincode": handle["pin"], "links": handle["links"], "llm": handle["llm"]}
+        if handle.get("items"):
+            start["items"] = handle["items"]
+        yield "start", start
         while True:
             try:
                 name, payload = handle["stages"].get(timeout=0.1)
@@ -382,10 +450,10 @@ def _search_events(handle: dict) -> Iterator[tuple[str, object]]:
                 yield "call", call
 
             if name is None:
-                if time.perf_counter() - t0 > SEARCH_TIMEOUT_S:
+                if time.perf_counter() - t0 > handle["timeout"]:
                     outcome = "timeout"
                     yield "error", {"code": "timeout",
-                                    "message": f"The search took longer than {SEARCH_TIMEOUT_S:.0f}s. Results so far are "
+                                    "message": f"The search took longer than {handle['timeout']:.0f}s. Results so far are "
                                                "shown; anything already fetched is cached and will be instant next time."}
                     break
                 yield "__tick__", None
@@ -404,6 +472,10 @@ def _search_events(handle: dict) -> Iterator[tuple[str, object]]:
                 yield name, {"at_ms": elapsed, "result": _clean_alternatives(payload)}
             elif name == "choose":
                 yield name, {"at_ms": elapsed, **payload}
+            elif name == "line":
+                yield name, {"at_ms": elapsed, **_clean_line(payload)}
+            elif name in ("basket", "basket_links"):
+                yield name, {"at_ms": elapsed, "result": _clean_basket(payload)}
             else:
                 yield name, {"at_ms": elapsed, "listings": _clean_rows(payload)}
 
@@ -528,6 +600,83 @@ def collect_search(q: str, pincode: str, links: bool, llm: bool, on_event=None) 
         elif name == "choose":
             result["choose"] = {k: v for k, v in data.items() if k != "at_ms"}
             result["stages"].append({"name": name, "at_ms": data["at_ms"]})
+        elif name == "call":
+            result["calls"].append(data)
+        elif name == "error":
+            result["error"] = data
+        elif name == "done":
+            result["summary"] = data
+    return json.loads(json.dumps(result, default=str))
+
+
+# ─────────────────────────────────────────────
+# Prescription: several medicines, one cheapest basket
+# ─────────────────────────────────────────────
+
+@app.get("/api/prescription/stream")
+def prescription_sse(
+    items: str = Query(..., max_length=4000),
+    pincode: str = Query("110001", max_length=20),
+    links: bool = False,
+    llm: bool = True,
+):
+    """
+    items = JSON list of {"q": "Dolo 650", "tablets": 30 | null} (1–8 lines). Events, in arrival order:
+      start        {query, pincode, links, llm, items}
+      call         one SerpApi request (every line's searches), as for a single search
+      line         {at_ms, line, query, status: choose | main | done, ...} — each line as it progresses
+      basket       {at_ms, result} — the cheapest basket (pharmawatch/basket.py optimise output)
+      basket_links {at_ms, result} — the same with direct links on the chosen offers (links=true only)
+      error, done  as for a single search (done sums every line's calls and credits)
+    """
+    try:
+        lines, pin = _validate_items(items, pincode)
+        handle = _start_search(f"prescription ({len(lines)} medicines)", pin, links, llm, items=lines)
+    except SearchRejected as e:
+        log.info("prescription refused (%s): %r", e.code, items[:120])
+        refused = [_sse("error", {"code": e.code, "message": e.message}), _sse("done", _EMPTY_DONE)]
+        return StreamingResponse(iter(refused), media_type="text/event-stream", headers=_SSE_HEADERS)
+    return StreamingResponse(_sse_stream(handle), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
+@app.get("/api/prescription")
+def prescription_json(
+    items: str = Query(..., max_length=4000),
+    pincode: str = Query("110001", max_length=20),
+    links: bool = False,
+    llm: bool = True,
+):
+    """
+    The same as one JSON response: {items, pincode, lines {i: last line event}, basket (final),
+    calls, summary, error}. 422 invalid input · 429 busy · 504 deadline · 502 pipeline error.
+    """
+    try:
+        result = collect_prescription(items, pincode, links, llm)
+    except SearchRejected as e:
+        raise HTTPException(e.status, {"code": e.code, "message": e.message})
+    if result["error"]:
+        status = 504 if result["error"]["code"] == "timeout" else 502
+        return JSONResponse(result, status_code=status)
+    return result
+
+
+def collect_prescription(items, pincode: str, links: bool, llm: bool, on_event=None) -> dict:
+    """
+    Validate and run one prescription to the end; the /api/prescription JSON body. items: the JSON
+    string, or a list of {q, tablets}. Raises SearchRejected before anything is spent.
+    """
+    lines, pin = _validate_items(items if isinstance(items, str) else json.dumps(items), pincode)
+    handle = _start_search(f"prescription ({len(lines)} medicines)", pin, links, llm, items=lines)
+    result = {"items": lines, "pincode": pin, "lines": {}, "basket": None, "calls": [], "summary": None, "error": None}
+    for name, data in _search_events(handle):
+        if name == "__tick__":
+            continue
+        if on_event is not None:
+            on_event(name, data)
+        if name == "line":
+            result["lines"][str(data["line"])] = data
+        elif name in ("basket", "basket_links"):
+            result["basket"] = data["result"]
         elif name == "call":
             result["calls"].append(data)
         elif name == "error":

@@ -188,7 +188,7 @@ def check_parallel_pipeline() -> list:
     started = {}
     t0 = time.perf_counter()
 
-    def fake_ranked(name, pin, exact_only, verbose):
+    def fake_ranked(name, pin, exact_only, verbose, main=None):
         started[name] = time.perf_counter() - t0
         time.sleep(0.4)
         return [{"platform": "1mg", "medicine_name": f"{name} Strip Of 10 Tablets", "price_inr": 50.0,
@@ -238,7 +238,7 @@ def check_stamlo_pipeline() -> list:
     requested = []
 
     def run(query, in_catalogue=True, failing=None):
-        def fake_ranked(name, pin, exact_only, verbose):
+        def fake_ranked(name, pin, exact_only, verbose, main=None):
             time.sleep(0.2 if name not in searches or name == "Stamlo 5" else 0.3)
             if name == failing:
                 raise RuntimeError("SerpApi error")

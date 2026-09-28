@@ -445,14 +445,18 @@ def thin_result_ttl(name: str):
     return ttl_for
 
 
-def ranked_listings(name: str, pincode, exact_only: bool = False, verbose: bool = False) -> List[dict]:
+def ranked_listings(name: str, pincode, exact_only: bool = False, verbose: bool = False,
+                    main: Optional[bool] = None) -> List[dict]:
     """
     search → distill → delivery-inclusive ranking for one medicine name.
-    The main search (exact_only=False) keeps a thin result for 1 h only; substitute searches
-    (exact_only=True) are often thin for real (brand not sold online) and keep the full TTL.
+    exact_only: no semantic reuse. Brand names always (a similar brand with the same dose is another
+                product: 'Atorbest 10' must never get 'Atorva 10' results).
+    main: the user's own search (default: not exact_only). It keeps a thin result for 1 h only; extra
+          searches are often thin for real (brand not sold online) and keep the full TTL.
     """
     from pharmawatch.search import search_prices
-    ttl_for = None if exact_only else thin_result_ttl(name)
+    is_main = (not exact_only) if main is None else main
+    ttl_for = thin_result_ttl(name) if is_main else None
     raw = search_prices(name, verbose=verbose, exact_only=exact_only, ttl_for=ttl_for)
     return rank_by_landed_price(distill_shopping_results(raw), pincode)
 
