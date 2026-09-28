@@ -1,0 +1,3 @@
+# API layer only — the pipeline's own dependencies live in the root requirements.txt
+fastapi>=0.110
+uvicorn[standard]>=0.29
