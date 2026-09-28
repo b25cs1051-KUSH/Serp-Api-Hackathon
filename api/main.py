@@ -487,14 +487,32 @@ def search_json(
     (504/502 still carry whatever was found before the failure).
     """
     try:
-        query, pin = _validate(q, pincode)
-        handle = _start_search(query, pin, links, llm)
+        result = collect_search(q, pincode, links, llm)
     except SearchRejected as e:
         raise HTTPException(e.status, {"code": e.code, "message": e.message})
+
+    if result["error"]:
+        status = 504 if result["error"]["code"] == "timeout" else 502
+        return JSONResponse(result, status_code=status)
+    return result
+
+
+def collect_search(q: str, pincode: str, links: bool, llm: bool, on_event=None) -> dict:
+    """
+    Validate, run one search to the end and return the /api/search JSON body (JSON-safe).
+    Raises SearchRejected before anything is spent. on_event(name, data), if given, sees every
+    event as it arrives (used by the MCP server for progress). Shared by GET /api/search and MCP.
+    """
+    query, pin = _validate(q, pincode)
+    handle = _start_search(query, pin, links, llm)
 
     result = {"query": query, "pincode": pin, "listings": None, "alternatives": None,
               "stages": [], "calls": [], "summary": None, "error": None}
     for name, data in _search_events(handle):
+        if name == "__tick__":
+            continue
+        if on_event is not None:
+            on_event(name, data)
         if name in ("main", "main_update", "main_links"):
             result["listings"] = data["listings"]
             result["stages"].append({"name": name, "at_ms": data["at_ms"]})
@@ -507,10 +525,6 @@ def search_json(
             result["error"] = data
         elif name == "done":
             result["summary"] = data
-
-    if result["error"]:
-        status = 504 if result["error"]["code"] == "timeout" else 502
-        return JSONResponse(json.loads(json.dumps(result, default=str)), status_code=status)
     return json.loads(json.dumps(result, default=str))
 
 
