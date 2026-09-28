@@ -342,27 +342,33 @@ npx @modelcontextprotocol/inspector --cli python mcp_server.py --method tools/li
 ```
 
 **Example.** Asking Claude *"Where is Stamlo 5 cheapest delivered to 110001, and is there a cheaper
-generic?"* makes it call `search_medicine`. Its answer has this shape (values from the offline test
-fixture in `scripts/test_mcp.py`):
+generic?"* makes it call `search_medicine`. Real output from a cached run (links shortened):
 
 ```markdown
 ## Stamlo 5: delivered prices to PIN 110001
 
-Cheapest delivered: **₹66.02** at Chemist180 (Free delivery).
+Cheapest delivered: **₹66.02** at Chemist180 (FREE delivery on every order).
 
 | # | Pharmacy | Product | Shelf price | Delivery | You pay | Arrives | Link |
 |---|---|---|---|---|---|---|---|
-| 1 | Chemist180 | Stamlo 5MG Tablet | ₹66.02 | Free delivery | ₹66.02 | — | [open](https://...) |
+| 1 | Chemist180 | Stamlo 5MG Tablet | ₹66.02 | FREE delivery on every order | ₹66.02 | 2-4 Days | [open](…) |
+| 2 | Medplus | Stamlo 5MG Tab | ₹80.51 | FREE delivery on every order | ₹80.51 | Same Day / Store Pickup | [open](…) |
+| 3 | Apollo Pharmacy | Stamlo-5 Tablet 15's | ₹40.00 | ₹80 delivery · add ₹159 more for FREE delivery | ₹120.00 | 10-30 Mins / 1 Day | [open](…) |
+| 4 | 1mg | Stamlo 5 Tablet | ₹76.60 | ₹50 delivery · add ₹23.40 more for FREE delivery | ₹126.60 | 1-2 Days | [open](…) |
+| 5 | Apollo Pharmacy | Stamlo-5 Tablet 30's | ₹80.00 | ₹80 delivery · add ₹119 more for FREE delivery | ₹160.00 | 10-30 Mins / 1 Day | [open](…) |
+| 6 | PharmEasy | Stamlo 5Mg Strip Of 30 Tablets | ₹61.99 | ₹120 delivery · add ₹338.01 more for FREE delivery | ₹181.99 | 1-2 Days | [open](…) |
 
-### Generic alternatives: Amlodipine
-Reference: Stamlo 5MG Tablet at ₹66.02, ₹6.60/tablet.
+### Generic alternatives: Amlodipine Besylate 5mg (Immediate Release)
+Reference: Stamlo 5MG Tablet at ₹66.02, ₹2.20/tablet.
 
 | Brand | Pharmacy | You pay | Per tablet | Pack | Saving |
 |---|---|---|---|---|---|
-| Amlokind 5 | Chemist180 | ₹19.41 | ₹1.94 | ~10 (est.) | ≈70.6% (₹4.66/tablet) |
+| Amlokind 5 | Chemist180 | ₹19.41 | ₹1.29 | ~15 (est.) | ≈41.4% (₹0.91/tablet) |
+
+~ = pack size estimated, ≈ = saving depends on it.
 
 ### Run
-3 SerpApi lookups · 1 credit spent · 2 served from cache (1 exact, 1 semantic) · 0.0 s
+4 SerpApi lookups · 0 credits spent · 4 served from cache (4 exact, 0 semantic) · 0.1 s
 ```
 
 ---
