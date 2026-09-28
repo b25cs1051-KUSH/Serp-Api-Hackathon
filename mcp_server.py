@@ -43,7 +43,6 @@ from mcp.types import ToolAnnotations  # noqa: E402
 from pydantic import Field  # noqa: E402
 
 import api.main as api  # noqa: E402
-from pharmawatch.search import _get_cache  # noqa: E402
 
 log = logging.getLogger("pharmawatch.mcp")
 
@@ -56,9 +55,6 @@ ResponseFormat = Annotated[
 
 @asynccontextmanager
 async def lifespan(server: MCPServer):
-    # Build the shared cache before any request can: _get_cache is not locked, and a warm-up thread
-    # racing the first tool call would create two caches and load the model twice at once.
-    await anyio.to_thread.run_sync(lambda: _get_cache(verbose=False))
     # Load the embedding model off the request path (~40 s once), exactly like the HTTP API.
     threading.Thread(target=api._warm, daemon=True, name="warm-up").start()
     yield

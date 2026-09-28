@@ -6,6 +6,7 @@ All results are raw SerpApi JSON — distiller.py cleans them.
 """
 
 import os
+import threading
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -20,21 +21,23 @@ load_dotenv()
 
 _PRICE_TTL = 86_400  # 24 hours — prices cached per day
 _cache_instance: Optional[SerpApiCache] = None
+_cache_lock = threading.Lock()
 
 
 def _get_cache(verbose: bool = True) -> SerpApiCache:
     """Build or return singleton SerpApiCache instance. Redis auto-fallback handled internally."""
     global _cache_instance
-    if _cache_instance is None:
-        _cache_instance = SerpApiCache(
-            api_key=os.getenv("SERP_API_KEY"),
-            similarity_threshold=0.88,
-            default_ttl=_PRICE_TTL,
-            verbose=verbose,
-        )
-    else:
-        _cache_instance.verbose = verbose
-    return _cache_instance
+    with _cache_lock:  # the API's warm-up thread and the first request can arrive together
+        if _cache_instance is None:
+            _cache_instance = SerpApiCache(
+                api_key=os.getenv("SERP_API_KEY"),
+                similarity_threshold=0.88,
+                default_ttl=_PRICE_TTL,
+                verbose=verbose,
+            )
+        else:
+            _cache_instance.verbose = verbose
+        return _cache_instance
 
 
 def warm_up(verbose: bool = True) -> float:
