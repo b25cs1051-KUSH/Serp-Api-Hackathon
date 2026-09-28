@@ -207,7 +207,7 @@ def check_parallel_pipeline() -> list:
     alt_starts = [started[b] for b in searched]
     return [
         check("Main streamed first (~0.4s)", events[0], ("main", 0.4)),
-        check("One same-salt search", searched, ["Paracetamol 650mg"]),
+        check("Extra searches: generic salt + Cipla brand", searched, ["Paracetamol 650mg tablet generic", "Paracip 650"]),
         check("Substitutes start right after main", all(0.35 < s < 0.55 for s in alt_starts), True),
         check("All done in ~0.8s", events[-1], ("alternatives", 0.8)),
         check("Event order (links off)", [k for k, _ in events], ["main", "alternatives"]),
@@ -365,12 +365,14 @@ def run_checks() -> bool:
         check("Januvia 50 accepted", (sita_match("Januvia 50mg Tablet") or {}).get("brand"), "Januvia 50mg"),
         check("Sitabite 50 accepted (nobody searched it)", (sita_match("Sitabite 50 mg Tablet 10's") or {}).get("brand"), "Sitabite 50mg"),
         # Substitute searches
-        check("Brand search adds one search by salt", pick_candidates(find_composition("Stamlo 5", use_llm=False), []),
-              ["Amlodipine 5mg"]),
-        check("SR brand's salt search keeps SR", pick_candidates(find_composition("Glyciphage SR 500", use_llm=False), []),
-              ["Metformin 500mg SR"]),
-        check("Salt search adds the widest-range maker's brand",
-              pick_candidates(find_composition("Sitagliptin 50mg", use_llm=False), []), ["Istavel 50mg"]),
+        check("Brand search: generic salt + Cipla's biggest brand", pick_candidates(find_composition("Stamlo 5", use_llm=False), []),
+              ["Amlodipine 5mg tablet generic", "Amlopres 5"]),
+        check("SR brand's generic search keeps SR", pick_candidates(find_composition("Glyciphage SR 500", use_llm=False), [])[0],
+              "Metformin 500mg SR tablet generic"),
+        check("Cipla brand family beats thin line (Paracip, not Cipmol)",
+              pick_candidates(find_composition("Dolo 650", use_llm=False), [])[1], "Paracip 650"),
+        check("Salt search without a Cipla brand: widest-range maker's brand",
+              pick_candidates(find_composition("Gliclazide 80mg", use_llm=False), []), ["Gliclazide 80mg tablet generic", "Nuzide 80mg"]),
         # Title filter (titles taken from cached shopping results)
         check("Exact brand title", title_matches_brand("Dolo 650mg Strip Of 15 Tablets", "Dolo 650"), True),
         check("Dolo-650 hyphen title", title_matches_brand("Dolo-650 Tablet 15's", "Dolo 650"), True),

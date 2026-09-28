@@ -134,13 +134,17 @@ CREATE INDEX IF NOT EXISTS idx_comp_salts ON compositions(salt_words);
 CREATE TABLE IF NOT EXISTS maker_size AS
     SELECT manufacturer_id, COUNT(*) AS n FROM products GROUP BY manufacturer_id;
 CREATE INDEX IF NOT EXISTS idx_maker_size ON maker_size(manufacturer_id);
+CREATE TABLE IF NOT EXISTS brand_family AS
+    SELECT first_token, COUNT(*) AS n FROM products GROUP BY first_token;
+CREATE INDEX IF NOT EXISTS idx_brand_family ON brand_family(first_token);
 CREATE VIEW IF NOT EXISTS product_view AS
     SELECT p.brand, p.brand_tokens, p.first_token, c.comp_key, p.mrp, p.pack,
            CASE WHEN p.mrp > 0 AND p.pack > 0 THEN round(p.mrp / p.pack, 4) END AS unit_mrp,
-           m.name AS manufacturer, ms.n AS maker_products
+           m.name AS manufacturer, ms.n AS maker_products, bf.n AS family_products
     FROM products p JOIN compositions c ON c.id = p.comp_id
     LEFT JOIN manufacturers m ON m.id = p.manufacturer_id
-    LEFT JOIN maker_size ms ON ms.manufacturer_id = p.manufacturer_id;
+    LEFT JOIN maker_size ms ON ms.manufacturer_id = p.manufacturer_id
+    LEFT JOIN brand_family bf ON bf.first_token = p.first_token;
 """
 
 _local = threading.local()
@@ -333,7 +337,7 @@ def resolve(query: str, _fuzzy: bool = True) -> dict:
 def same_composition(comp_key: str) -> List[dict]:
     """Every brand with this composition, one row per brand, cheapest list price per unit first."""
     best: Dict[str, dict] = {}
-    for r in _q("SELECT brand, brand_tokens, first_token, mrp, pack, unit_mrp, manufacturer, maker_products FROM product_view WHERE comp_key = ?", comp_key):
+    for r in _q("SELECT brand, brand_tokens, first_token, mrp, pack, unit_mrp, manufacturer, maker_products, family_products FROM product_view WHERE comp_key = ?", comp_key):
         row = dict(r)
         cur = best.get(row["brand_tokens"])
         price = row["unit_mrp"] if row["unit_mrp"] is not None else row["mrp"]

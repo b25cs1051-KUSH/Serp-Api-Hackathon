@@ -125,6 +125,7 @@ def find_composition(query: str, use_llm: bool = True, resolution: Optional[dict
         "reason": reason,
         "comp_key": res["comp_key"],
         "salt_query": medicines.salt_query(res),
+        "generic_query": generic_query(medicines.salt_query(res), res["form"]),
         "strengths": res.get("strengths", ""),
         "group": group,
         "alternatives": [],
@@ -145,21 +146,55 @@ def group_matcher(match: dict):
     return brand_of
 
 
+# Makers whose generic ranges pharmacies discount hardest. On 1mg, Chemist180 and Medplus the
+# "cheaper alternative" offered for Dolo 650, Stamlo 5 and Atorbest 10 was a Cipla brand each time
+# (Paracip 650 ₹1.39/tab, Parafast 650 ₹1.52, Amlip 5 ₹1.35, Lipvas 10 ₹3.30) although those rank
+# 449th/500, 243rd/281 and 557th/655 by list price: cheap only after the pharmacy's discount, so
+# list prices can't find them. One search for the group's brand from these makers can: Google answers
+# a brand search with ~10 same-salt brands, and "Paracip 650" found Paracip at ₹1.08/tab (Netmeds).
+# Among the maker's brands the one with the largest family (most products under its name) is picked:
+# thin lines such as Cipmol 650 surface less.
+GENERIC_LINE_MAKERS = ("cipla ltd",)
+
+
+def generic_line_brand(match: dict) -> Optional[str]:
+    """The group's biggest brand family from GENERIC_LINE_MAKERS, never the searched brand."""
+    searched = set(_tokens(match["matched_brand"] or ""))
+    rows = [g for g in match["group"]
+            if (g.get("manufacturer") or "").lower() in GENERIC_LINE_MAKERS
+            and set(g["brand_tokens"].split()) != searched]
+    if not rows:
+        return None
+    return min(rows, key=lambda g: (-(g.get("family_products") or 0), g["unit_mrp"] is None, g["unit_mrp"] or 0,
+                                    g["brand"]))["brand"]
+
+
+def generic_query(salt_query: str, form: str) -> str:
+    """'Amlodipine 5mg' → 'Amlodipine 5mg tablet generic'. The word 'generic' steers Google Shopping to the
+    discounted generics pharmacies push: 'Atorvastatin 10mg tablet generic' found Torvason 10 at ₹2.14/tab
+    (Chemist180), 'Amlodipine 5mg tablet generic' Amodep 5 at ₹1.01; the plain salt found ₹2.47 and ₹1.15."""
+    return f"{salt_query} tablet generic" if form == "tablet" else f"{salt_query} generic"
+
+
 def pick_candidates(match: dict, found: List[dict]) -> List[str]:
     """
-    The one extra search after the main one. Any search in the same salt widens the pool: Google
-    lists related brands of that salt, and every listing is checked against the whole group.
-      brand search ('Stamlo 5')        → the salt ('Amlodipine 5mg'): the brands of it sold online
-      salt search ('Sitagliptin 50mg') → the brand whose maker has the widest range (Istavel 50,
-                                          Sun Pharma): Google answered the salt with metformin
-                                          combinations, the brand search with 12 plain listings
+    The 2 extra searches after the main one. Any search in the same salt widens the pool: Google lists
+    ~10 related brands of that salt, and every listing is checked against the whole group.
+      1. the salt + 'tablet generic' (generic_query): the discounted generics pharmacies push
+      2. the GENERIC_LINE_MAKERS brand with the largest family ('Paracip 650': Paracip at ₹1.08/tab);
+         a salt search with no such brand gets the widest-range maker's brand instead
+         ('Sitagliptin 50mg' → Istavel 50, 2 listings became 14)
     Picking brands by list price was tried first: for Gliclazide 80mg none of the 3 chosen brands
     appeared in their own results (their results added other gliclazide brands through pooling).
     """
-    if match["matched_as"] == "brand":
-        return [match["salt_query"]]
-    widest = max(match["group"], key=lambda g: (g.get("maker_products") or 0, -(g["unit_mrp"] or 1e9)), default=None)
-    return [widest["brand"]] if widest else []
+    searches = [match["generic_query"]]
+    brand = generic_line_brand(match)
+    if brand is None and match["matched_as"] == "salt":
+        widest = max(match["group"], key=lambda g: (g.get("maker_products") or 0, -(g["unit_mrp"] or 1e9)), default=None)
+        brand = widest["brand"] if widest else None
+    if brand:
+        searches.append(brand)
+    return searches
 
 
 # Spelling fixes with several possible answers: Gemini picks from the dataset's candidates only.
