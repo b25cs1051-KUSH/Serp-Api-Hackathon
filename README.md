@@ -8,10 +8,10 @@ that are cheaper, and works out the **cheapest way to buy everything**, delivery
 Prescription · PIN 110001: Dolo 650 ×30 tablets, Stamlo 5, Atorbest 10
 
   Cheapest basket  ₹93.37   one order at Chemist180, free delivery
-    Paracip 650  3 × 10   ₹41.82   ₹1.39/tablet   same salt as Dolo 650
-    Amodep 5     2 × 15   ₹30.16   ₹1.01/tablet   same salt as Stamlo 5 (₹2.20/tablet)
-    Torvason 10  1 × 10   ₹21.39   ₹2.14/tablet   same salt as Atorbest 10 (not sold online here)
-  → ₹46.68 less than the prescribed brands (on the 2 sold online)
+    Paracip 650  3 × 10   ₹41.82   ₹1.39/tablet   same salt as Dolo 650    (₹1.75/tablet)
+    Amodep 5     2 × 15   ₹30.16   ₹1.01/tablet   same salt as Stamlo 5    (₹2.20/tablet)
+    Torvason 10  1 × 10   ₹21.39   ₹2.14/tablet   same salt as Atorbest 10 (₹3.66/tablet)
+  → ₹61.85 less than the prescribed brands (₹155.22), 40% of the bill
 ```
 
 It is built on [SerpApi](https://serpapi.com) (Google Shopping + Google product pages), a Redis cache
@@ -349,12 +349,23 @@ similar text, similarity above 0.88. The main list came back empty.
 **Fix:** a search the index identifies as a brand is looked up by exact name only, like substitute
 searches (problem 1). Salt searches still use the semantic cache.
 
+### 14. Google answered some brands with other brands only
+
+"Pan 40 price" returned 24 listings of other pantoprazole brands and not one Pan 40; "Atorbest 10
+price" returned Atorbest 20 only. The prescribed brand then looked unavailable, and the basket could
+not compare it.
+
+**Fix:** when a brand's own search has none of it, one more search adds the form word ("Pan 40
+tablet": 5 listings of Pan 40; "Atorbest 10 tablet": 6). In a 5-medicine prescription this turned
+"compared on 3 of 5 medicines" into all 5: ₹560.00 as prescribed vs ₹415.16 cheapest.
+
 ## What one search costs
 
 | Call | SerpApi credits | When |
 |---|---|---|
 | Main search | 1 | Always, unless cached (24 h) |
 | Generic salt search | 1 | "Amlodipine 5mg tablet generic" for Stamlo 5 |
+| Brand retry | 0–1 | Only when Google's answer to a brand has none of it ("Pan 40" → "Pan 40 tablet") |
 | Discounted-generic brand | 1 | The Cipla brand of the salt with the largest family ("Paracip 650"); for a salt search without one, the brand with the widest maker range |
 | Product-page links, main list | up to 5 | Only the top 5 real matches, only when links are on |
 | Product-page links, alternatives | 0–3 | The 3 cheapest alternatives that beat the searched brand |

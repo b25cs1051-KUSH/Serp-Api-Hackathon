@@ -125,6 +125,7 @@ def find_composition(query: str, use_llm: bool = True, resolution: Optional[dict
         "reason": reason,
         "comp_key": res["comp_key"],
         "salt_query": medicines.salt_query(res),
+        "form": res.get("form", ""),
         "generic_query": generic_query(medicines.salt_query(res), res["form"]),
         "strengths": res.get("strengths", ""),
         "group": group,
@@ -188,6 +189,14 @@ def pick_candidates(match: dict, found: List[dict]) -> List[str]:
     appeared in their own results (their results added other gliclazide brands through pooling).
     """
     searches = [match["generic_query"]]
+    # Google sometimes answers a short brand name with other brands only ("Pan 40 price": 24 listings,
+    # none of Pan 40; "Atorbest 10 price": Atorbest 20 only). With the form word it finds them
+    # ("Pan 40 tablet": 5 listings of Pan 40), so that search is added when the brand is missing.
+    if match["matched_as"] == "brand" and match["matched_brand"]:
+        allow = allows_other_forms(match["matched_brand"], match["entry"])
+        if not any(title_matches_brand(r.get("medicine_name", ""), match["matched_brand"], allow) for r in found):
+            form = (match.get("form") or "tablet").split()[-1]
+            searches.insert(0, f"{match['matched_brand']} {form}")
     brand = generic_line_brand(match)
     if brand is None and match["matched_as"] == "salt":
         widest = max(match["group"], key=lambda g: (g.get("maker_products") or 0, -(g["unit_mrp"] or 1e9)), default=None)
