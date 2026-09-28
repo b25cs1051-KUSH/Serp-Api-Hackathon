@@ -25,6 +25,7 @@ from a curated catalogue.
 - [Problems we hit, and what fixed them](#problems-we-hit-and-what-fixed-them)
 - [What one search costs](#what-one-search-costs)
 - [Setup](#setup)
+- [Use it from Claude (MCP)](#use-it-from-claude-mcp)
 - [Tests](#tests)
 - [Project layout](#project-layout)
 - [Known limits](#known-limits)
@@ -288,12 +289,91 @@ browser `EventSource` can't read an HTTP error body.
 
 ---
 
+## Use it from Claude (MCP)
+
+`mcp_server.py` exposes PharmaWatch as an [MCP](https://modelcontextprotocol.io) server over stdio,
+built on the official Python SDK. Each tool is a thin wrapper over `api/main.py`, so input validation,
+the concurrency limit, the search deadline and credit accounting are the same as the HTTP API.
+
+| Tool | What it does | Credits |
+|---|---|---|
+| `search_medicine(query, pincode, resolve_links=false)` | Delivered-price ranking for the PIN, cheaper generics with per-tablet savings, and a calls/credits summary | up to ~12 for a new medicine, 0 from cache |
+| `cache_lab(query, top=6)` | What the cache would do: exact key, nearest cached queries with cosine scores, the dosage guard | 0 |
+| `cache_stats()` | Redis status, what is cached (by kind and size), credits spent vs saved this session | 0 |
+
+Design choices:
+
+- **Markdown by default, JSON on request.** Tools return a compact Markdown answer for the model's
+  context (top 10 listings, no thumbnails or page tokens). `response_format="json"` returns the same
+  data as trimmed JSON.
+- **Credit-safe defaults.** `resolve_links` is off unless the user asks for direct pharmacy URLs. The
+  server instructions tell the model to call `cache_lab` first when credits matter.
+- **Tool annotations.** `cache_lab` and `cache_stats` are marked read-only. `search_medicine` is marked
+  open-world, non-destructive and idempotent (a repeat is served from cache).
+- **Errors the model can act on.** A bad PIN or query comes back as a tool error
+  (`invalid_pincode: ...`) before anything is spent. A search that fails halfway still returns what it
+  found, marked "Search incomplete".
+- **Progress.** `search_medicine` reports each SerpApi lookup and each finished stage as MCP progress
+  notifications.
+- **Clean stdout.** The protocol runs on a private copy of stdout. Console prints from the cache and
+  library warnings go to stderr, which MCP clients keep as the server log.
+
+**Claude Desktop** (`claude_desktop_config.json`; use your own absolute path and Python):
+
+```json
+{
+  "mcpServers": {
+    "pharmawatch": {
+      "command": "python",
+      "args": ["/absolute/path/to/Serp-Api-Hackathon/mcp_server.py"]
+    }
+  }
+}
+```
+
+The server reads `.env` from the repo root, whatever directory the client starts it in. Redis must be
+running (`docker compose up -d`).
+
+**MCP Inspector:**
+
+```bash
+npx @modelcontextprotocol/inspector python mcp_server.py                     # web UI
+npx @modelcontextprotocol/inspector --cli python mcp_server.py --method tools/list
+```
+
+**Example.** Asking Claude *"Where is Stamlo 5 cheapest delivered to 110001, and is there a cheaper
+generic?"* makes it call `search_medicine`. Its answer has this shape (values from the offline test
+fixture in `scripts/test_mcp.py`):
+
+```markdown
+## Stamlo 5: delivered prices to PIN 110001
+
+Cheapest delivered: **₹66.02** at Chemist180 (Free delivery).
+
+| # | Pharmacy | Product | Shelf price | Delivery | You pay | Arrives | Link |
+|---|---|---|---|---|---|---|---|
+| 1 | Chemist180 | Stamlo 5MG Tablet | ₹66.02 | Free delivery | ₹66.02 | — | [open](https://...) |
+
+### Generic alternatives: Amlodipine
+Reference: Stamlo 5MG Tablet at ₹66.02, ₹6.60/tablet.
+
+| Brand | Pharmacy | You pay | Per tablet | Pack | Saving |
+|---|---|---|---|---|---|
+| Amlokind 5 | Chemist180 | ₹19.41 | ₹1.94 | ~10 (est.) | ≈70.6% (₹4.66/tablet) |
+
+### Run
+3 SerpApi lookups · 1 credit spent · 2 served from cache (1 exact, 1 semantic) · 0.0 s
+```
+
+---
+
 ## Tests
 
 ```bash
 python scripts/test_p5_generics.py                           # 101 offline checks, 0 credits
 python scripts/test_p4_delivery_cost.py                      # delivery rules, 0 credits
 python scripts/test_api.py                                   # 38 API checks, stubbed pipeline, 0 credits
+python scripts/test_mcp.py                                   # MCP tools in memory + 3 real stdio sessions, 0 credits
 python scripts/test_p5_generics.py --llm "dollo 650" "Telma 40 H"          # Gemini only, 0 SerpApi credits
 python scripts/test_p5_generics.py "Stamlo 5" 110001 --cache-only          # replay from Redis, 0 credits
 python scripts/test_p5_generics.py "Stamlo 5" 110001                       # live run, full call log
@@ -325,6 +405,7 @@ pharmawatch/
   drug_db/compositions.md   79 compositions, 307 brands
 notes/postal_codes_delivery_rules.json   PIN zones and delivery fees per pharmacy
 api/                    FastAPI layer (SSE search, health, cache lab)
+mcp_server.py           MCP server (stdio): the same search and cache lab as tools
 web/                    Next.js UI
 scripts/                offline tests, live replay, threshold tuning
 docker-compose.yml      Redis with append-only persistence
