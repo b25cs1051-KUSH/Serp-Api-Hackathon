@@ -96,9 +96,11 @@ its own order total (1mg free from ₹100, Apollo from ₹199, Netmeds from ₹5
 buying each medicine where it is cheapest alone can cost more than putting two in one order.
 
 - Every same-composition offer covers the needed tablets in whole packs.
-- Every way of assigning medicines to pharmacies is priced with the real delivery rules on each
-  pharmacy's subtotal. It is exact over the cheapest offer per pharmacy and medicine, checked against
-  brute force on 60 random baskets. 8 medicines: 131,072 assignments in about 0.5 s.
+- Assignments of medicines to pharmacies are priced with the real delivery rules on each pharmacy's
+  subtotal, by branch and bound: delivery fees are never negative, so item costs so far plus the
+  cheapest possible remaining items bound any basket, and branches that can't win are cut. It is exact
+  over the cheapest offer per pharmacy and medicine, checked against brute force on 200 random
+  baskets. 8 medicines × 7 pharmacies (5.7 million assignments): about 2 ms.
 - Two answers: **cheapest with same-salt swaps** and **exactly as prescribed**, plus the best single
   pharmacy and the saving (compared on the medicines both can cover).
 - Direct product links are resolved only for the offers the basket picked.

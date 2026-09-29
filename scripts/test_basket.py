@@ -111,11 +111,11 @@ def run():
     o = basket.build_offers({"query": "Zyxoltab 5", "tablets": None}, pooled, None)
     check("no count → one pack", (o["tablets"], o["tablets_how"], o["offers"][0]["packs"]), (10, "one pack", 1))
 
-    # 8. The pruned search equals brute force on random baskets.
+    # 8. The branch-and-bound search equals brute force on random baskets.
     rng = random.Random(7)
     platforms = ["1mg", "Chemist180", "Netmeds", "Apollo Pharmacy", "PharmEasy", "Truemeds", "Medplus"]
     mismatches = 0
-    for _ in range(60):
+    for _ in range(200):
         lines = []
         for li in range(rng.randint(1, 4)):
             offers = [offer(p, round(rng.uniform(10, 400), 2), f"B{li}", rng.random() < 0.5)
@@ -125,14 +125,19 @@ def run():
         want = brute_force(lines)
         if (got["total"] if got else None) != want:
             mismatches += 1
-    check("pruned search = brute force (60 random baskets)", mismatches, 0)
+    check("branch and bound = brute force (200 random baskets)", mismatches, 0)
 
-    # 9. Many lines stay fast (search space capped).
+    # 9. Many lines stay fast: 8 lines × 7 pharmacies = 5.7 million assignments, cut by the bound.
     lines = [line(f"L{i}", *[offer(p, 50 + 7 * i + j) for j, p in enumerate(platforms)]) for i in range(8)]
     r = basket.optimise(lines, PIN)
-    check("8 lines: combinations capped", r["stats"]["combinations"] <= 2 * basket.MAX_COMBINATIONS, True)
-    check("8 lines: under 5 s", r["stats"]["ms"] < 5000, True)
-    print(f"        (8 lines: {r['stats']['combinations']} combinations in {r['stats']['ms']} ms)")
+    check("8 lines × 7 pharmacies: under 1 s", r["stats"]["ms"] < 1000, True)
+    print(f"        (8 lines: {r['stats']['combinations']} search nodes in {r['stats']['ms']} ms)")
+    rng2 = random.Random(11)
+    big = [line(f"B{i}", *[offer(p, round(rng2.uniform(20, 300), 2), f"b{i}{j}", j == 0) for j, p in enumerate(platforms)])
+           for i in range(8)]
+    r = basket.optimise(big, PIN)
+    check("8 random lines × 7 pharmacies: under 2 s", r["stats"]["ms"] < 2000, True)
+    print(f"        (random 8 lines: {r['stats']['combinations']} search nodes in {r['stats']['ms']} ms)")
 
 
 if __name__ == "__main__":

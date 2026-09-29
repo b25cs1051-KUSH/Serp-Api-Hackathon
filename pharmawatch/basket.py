@@ -17,13 +17,13 @@ Two answers are computed:
   as_prescribed : only the prescribed brand (any brand of the composition for a salt search)
   with_swaps    : any brand with the same salts, strengths, form and release (same composition key)
 
-The search is exact over the offers kept: every line keeps its cheapest offer per pharmacy, the
-best MAX_STORES_PER_LINE of those (fewer when there are many lines, so at most MAX_COMBINATIONS
-assignments are tried), and every assignment of lines to pharmacies is priced with the real
-delivery rules on each pharmacy's subtotal.
+The search is exact over every line's cheapest offer per pharmacy: a branch-and-bound over the
+assignments of lines to pharmacies, each priced with the real delivery rules on each pharmacy's
+subtotal. Delivery fees are never negative, so the item costs picked so far plus the cheapest item
+cost of every remaining line is a lower bound; a branch that can't beat the best basket found is cut.
+MAX_NODES caps the work for pathological inputs (the best basket found so far is kept).
 """
 
-import itertools
 import math
 import time
 from functools import lru_cache
@@ -32,8 +32,7 @@ from typing import Dict, List, Optional, Tuple
 from pharmawatch.delivery_cost import calculate_delivery_cost
 from pharmawatch.generics import _best_listing, _prepare, _tokens, allows_other_forms, group_matcher
 
-MAX_STORES_PER_LINE = 8
-MAX_COMBINATIONS = 200_000
+MAX_NODES = 2_000_000
 _DELIVERABLE = ("free", "charged")
 
 
@@ -158,19 +157,47 @@ def _price(assignment: Tuple[dict, ...], fee) -> Optional[Tuple[float, Dict[str,
 
 
 def _search(per_line: List[List[dict]], fee) -> Tuple[Optional[Tuple[dict, ...]], int]:
-    """Cheapest assignment of one offer per line; (best, combinations tried)."""
-    lines = len(per_line)
-    keep = MAX_STORES_PER_LINE
-    while keep > 1 and math.prod(min(keep, len(c)) for c in per_line) > MAX_COMBINATIONS:
-        keep -= 1
-    choices = [c[:keep] for c in per_line]
-    best, best_total, tried = None, math.inf, 0
-    for assignment in itertools.product(*choices):
-        tried += 1
-        priced = _price(assignment, fee)
-        if priced is not None and priced[0] < best_total:
-            best, best_total = assignment, priced[0]
-    return (best if lines else None), tried
+    """Cheapest assignment of one offer per line (branch and bound); (best, search nodes visited)."""
+    n = len(per_line)
+    if not n or any(not c for c in per_line):
+        return None, 0
+    # Most expensive lines first: their choice moves the total most, so bounds bite early.
+    order = sorted(range(n), key=lambda i: -min(o["item_cost"] for o in per_line[i]))
+    choices = [sorted(per_line[i], key=lambda o: o["item_cost"]) for i in order]
+    rest = [0.0] * (n + 1)                      # cheapest possible item cost of lines k..n-1
+    for k in range(n - 1, -1, -1):
+        rest[k] = rest[k + 1] + choices[k][0]["item_cost"]
+
+    best, best_total, nodes = None, math.inf, 0
+    seed = tuple(c[0] for c in choices)         # each line at its cheapest: a good first bound
+    priced = _price(seed, fee)
+    if priced is not None:
+        best, best_total = seed, priced[0]
+
+    picked: List[dict] = []
+
+    def dfs(k: int, items: float) -> None:
+        nonlocal best, best_total, nodes
+        if k == n:
+            p = _price(tuple(picked), fee)
+            if p is not None and p[0] < best_total - 1e-9:
+                best, best_total = tuple(picked), p[0]
+            return
+        for o in choices[k]:
+            if items + o["item_cost"] + rest[k + 1] >= best_total - 1e-9 or nodes >= MAX_NODES:
+                break                            # sorted by cost: every later option is worse
+            nodes += 1
+            picked.append(o)
+            dfs(k + 1, items + o["item_cost"])
+            picked.pop()
+
+    dfs(0, 0.0)
+    if best is None:
+        return None, nodes
+    back = [None] * n                            # original line order
+    for pos, i in enumerate(order):
+        back[i] = best[pos]
+    return tuple(back), nodes
 
 
 def _describe(assignment: Tuple[dict, ...], line_ids: List[int], fee) -> dict:
@@ -214,7 +241,7 @@ def optimise(lines: List[dict], pincode) -> dict:
       "saving_lines": the lines that saving covers,
       "per_line": [{"line", "query", "tablets", "tablets_how", "cheapest_prescribed", "cheapest_any"}],
       "unavailable": [line indexes with no deliverable offer],
-      "stats": {"combinations": int, "ms": float},
+      "stats": {"combinations": search nodes visited, "ms": float},
     }
     plan = {"total", "items_total", "fees_total", "stores": [{"platform", "lines": [offer + line],
             "subtotal", "fee", "delivery_label", "free_delivery", "total"}]}
