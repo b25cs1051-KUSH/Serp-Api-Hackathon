@@ -110,7 +110,65 @@ class SerpApiError(RuntimeError):
     """A failed SerpApi request (HTTP error, timeout, quota). The message never contains the key."""
 
 
+class CreditBudgetExceeded(SerpApiError):
+    """DAILY_CREDIT_BUDGET reached: cache misses are refused until 00:00 UTC; cached searches still work."""
+
+
 RECONNECT_EVERY_S = 30.0
+
+# A SerpApi answer meaning "this key has no searches left" (or is rate limited): try the next key.
+_OUT_OF_SEARCHES_RE = re.compile(r"run out of searches|\b429\b|too many requests", re.I)
+
+
+# ─────────────────────────────────────────────
+# ONNX embeddings (EMBEDDING_BACKEND=onnx)
+# ─────────────────────────────────────────────
+
+class _OnnxEncoder:
+    """
+    The same Sentence-Transformers model run with onnxruntime instead of PyTorch: identical vectors
+    (cosine 1.0000000 vs SentenceTransformer.encode on our queries) at a fraction of the memory.
+    PyTorch + sentence-transformers take ~370 MB, more than a 512 MB host can spare.
+    Mean pooling over the attention mask, then L2 normalisation, as all-MiniLM-L6-v2 is configured.
+    """
+
+    def __init__(self, model_name: str):
+        import numpy as np
+        import onnxruntime as ort
+        from huggingface_hub import hf_hub_download
+        from tokenizers import Tokenizer
+
+        repo = model_name if "/" in model_name else f"sentence-transformers/{model_name}"
+
+        def fetch(name: str) -> str:
+            try:
+                return hf_hub_download(repo, name, local_files_only=True)  # no update check
+            except Exception:
+                return hf_hub_download(repo, name)
+
+        self._np = np
+        self._tok = Tokenizer.from_file(fetch("tokenizer.json"))
+        self._tok.enable_truncation(max_length=256)  # the model's max_seq_length
+        self._tok.no_padding()
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = 1  # one short query at a time; avoids a thread pool per core
+        self._sess = ort.InferenceSession(fetch("onnx/model.onnx"), options, providers=["CPUExecutionProvider"])
+        self._inputs = {i.name for i in self._sess.get_inputs()}
+
+    def encode(self, text: str, normalize_embeddings: bool = True):
+        np = self._np
+        enc = self._tok.encode(text)
+        feed = {
+            "input_ids": np.array([enc.ids], dtype=np.int64),
+            "attention_mask": np.array([enc.attention_mask], dtype=np.int64),
+            "token_type_ids": np.array([enc.type_ids], dtype=np.int64),
+        }
+        hidden = self._sess.run(None, {k: v for k, v in feed.items() if k in self._inputs})[0]
+        mask = feed["attention_mask"][..., None].astype(np.float32)
+        vec = ((hidden * mask).sum(axis=1) / np.clip(mask.sum(axis=1), 1e-9, None))[0]
+        if normalize_embeddings:
+            vec = vec / max(float(np.linalg.norm(vec)), 1e-12)
+        return vec
 
 
 def _cache_params(params: dict) -> dict:
@@ -173,6 +231,17 @@ class SerpApiCache:
             raise ValueError(
                 "No SerpApi key found. Pass api_key= or set SERP_API_KEY in your .env"
             )
+        # SERPAPI_ROTATE_KEYS=1 (hosted demo): when a key runs out of searches, continue with
+        # SERP_API_KEY_2. Off by default, so a local run never spends the second key by surprise.
+        self._keys = [self.api_key]
+        second = os.getenv("SERP_API_KEY_2")
+        if os.getenv("SERPAPI_ROTATE_KEYS", "").lower() in ("1", "true", "yes") and second and second != self.api_key:
+            self._keys.append(second)
+        self._key_lock = threading.Lock()
+        # DAILY_CREDIT_BUDGET=N (hosted demo): at most N SerpApi calls per UTC day, counted in Redis so
+        # restarts don't reset it. 0 / unset = no limit.
+        self.daily_budget = int(os.getenv("DAILY_CREDIT_BUDGET", "0") or 0)
+        self._budget_local: dict[str, int] = {}  # fallback counter while Redis is down
 
         # ── Config ───────────────────────────────────────────────
         self.threshold = similarity_threshold
@@ -448,6 +517,11 @@ class SerpApiCache:
             if self._model is None:
                 if self.verbose:
                     say(f"⏳ Loading embedding model '{self._model_name}' (first-time only)...")
+                if os.getenv("EMBEDDING_BACKEND", "").lower() == "onnx":
+                    self._model = _OnnxEncoder(self._model_name)
+                    if self.verbose:
+                        say("✅ Embedding model loaded (onnxruntime).\n")
+                    return
                 # Windows: scikit-learn's OpenMP runtime (vcomp140) takes ~20s to load once torch's
                 # is loaded, which is the order sentence_transformers imports them in. Loading
                 # scikit-learn first takes ~1.5s.
@@ -515,14 +589,59 @@ class SerpApiCache:
         except ImportError:
             raise ImportError("serpapi package not installed. Run: pip install serpapi")
 
-        # The client's default is no timeout: one hung request would block its search forever.
-        client = serpapi.Client(api_key=self.api_key, timeout=float(os.getenv("SERPAPI_TIMEOUT", "30")))
+        self._spend_budget()
+        while True:
+            key = self.api_key
+            # The client's default is no timeout: one hung request would block its search forever.
+            client = serpapi.Client(api_key=key, timeout=float(os.getenv("SERPAPI_TIMEOUT", "30")))
+            try:
+                result = client.search({**params})
+            except Exception as e:
+                # `from None`: the original exception (and its traceback) quotes the URL with the key.
+                message = redact(f"{type(e).__name__}: {e}")
+                if _OUT_OF_SEARCHES_RE.search(message) and self._next_key(key):
+                    continue  # same request on the next key
+                raise SerpApiError(message) from None
+            return dict(result)
+
+    def _next_key(self, failed: str) -> bool:
+        """Switch to the next configured key after `failed` ran out. False when there is none left."""
+        with self._key_lock:
+            if self.api_key != failed:
+                return True  # another thread already switched
+            i = self._keys.index(failed) if failed in self._keys else len(self._keys)
+            if i + 1 >= len(self._keys):
+                return False
+            self.api_key = self._keys[i + 1]
+            if self.verbose:
+                say(f"🔁 SerpApi key {i + 1} is out of searches; using key {i + 2}")
+            return True
+
+    def _spend_budget(self) -> None:
+        """Count one SerpApi call against DAILY_CREDIT_BUDGET; raise CreditBudgetExceeded past it."""
+        if self.daily_budget <= 0:
+            return
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        r = getattr(self.backend, "_r", None)
         try:
-            result = client.search({**params})
-        except Exception as e:
-            # `from None`: the original exception (and its traceback) quotes the URL with the key.
-            raise SerpApiError(redact(f"{type(e).__name__}: {e}")) from None
-        return dict(result)
+            if r is None:
+                raise ConnectionError("no Redis")
+            counter = f"serpapi:budget:{day}"
+            used = int(r.incr(counter))
+            if used == 1:
+                r.expire(counter, 2 * 86_400)
+            if used > self.daily_budget:
+                r.decr(counter)  # a refused call spent nothing
+        except Exception:
+            with self._key_lock:
+                used = self._budget_local.get(day, 0) + 1
+                if used <= self.daily_budget:
+                    self._budget_local[day] = used
+        if used > self.daily_budget:
+            raise CreditBudgetExceeded(
+                f"Today's demo budget of {self.daily_budget} SerpApi searches is used up. Medicines already "
+                "searched today still work instantly from the cache; new ones are back at 00:00 UTC."
+            )
 
     @staticmethod
     def _params_to_query_string(params: dict) -> str:
