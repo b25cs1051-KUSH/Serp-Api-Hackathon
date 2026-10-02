@@ -254,7 +254,8 @@ def check_parallel_pipeline() -> list:
     alt_starts = [started[b] for b in searched]
     return [
         check("Main streamed first (~0.4s)", events[0], ("main", 0.4)),
-        check("Extra searches: generic salt + Cipla brand", searched, ["Paracetamol 650mg tablet generic", "Paracip 650"]),
+        check("Extra searches: generic salt, its Chemist180 form, Cipla brand", searched,
+              ["Paracetamol 650mg tablet generic", "Paracetamol 650mg tablet generic chemist180", "Paracip 650"]),
         check("Substitutes start right after main", all(0.35 < s < 0.55 for s in alt_starts), True),
         check("All done in ~0.8s", events[-1], ("alternatives", 0.8)),
         check("Event order (links off)", [k for k, _ in events], ["main", "alternatives"]),
@@ -413,7 +414,7 @@ def run_checks() -> bool:
         check("Sitabite 50 accepted (nobody searched it)", (sita_match("Sitabite 50 mg Tablet 10's") or {}).get("brand"), "Sitabite 50mg"),
         # Substitute searches
         check("Brand search: generic salt + Cipla's biggest brand", pick_candidates(find_composition("Stamlo 5", use_llm=False), [{"medicine_name": "Stamlo 5MG Tablet"}]),
-              ["Amlodipine 5mg tablet generic", "Amlopres 5"]),
+              ["Amlodipine 5mg tablet generic", "Amlodipine 5mg tablet generic chemist180", "Amlopres 5"]),
         check("SR brand's generic search keeps SR", pick_candidates(find_composition("Glyciphage SR 500", use_llm=False), [{"medicine_name": "Glyciphage SR 500mg Tablet"}])[0],
               "Metformin 500mg SR tablet generic"),
         check("Brand missing from its own results: retry with the form word",
@@ -422,9 +423,13 @@ def run_checks() -> bool:
               pick_candidates(find_composition("Pan 40", use_llm=False), [{"medicine_name": "Pan 40 Tablet 10's"}])[0],
               "Pantoprazole 40mg tablet generic"),
         check("Cipla brand family beats thin line (Paracip, not Cipmol)",
-              pick_candidates(find_composition("Dolo 650", use_llm=False), [{"medicine_name": "Dolo 650 Tablet"}])[1], "Paracip 650"),
+              pick_candidates(find_composition("Dolo 650", use_llm=False), [{"medicine_name": "Dolo 650 Tablet"}])[-1], "Paracip 650"),
+        check("Combination: no Chemist180 query (it returned nothing for combinations)",
+              pick_candidates(find_composition("Amlokind AT", use_llm=False), [{"medicine_name": "Amlokind AT Tablet"}]),
+              ["Amlodipine 5mg + Atenolol 50mg tablet generic", "Amlopres-AT"]),
         check("Salt search without a Cipla brand: widest-range maker's brand",
-              pick_candidates(find_composition("Gliclazide 80mg", use_llm=False), []), ["Gliclazide 80mg tablet generic", "Nuzide 80mg"]),
+              pick_candidates(find_composition("Gliclazide 80mg", use_llm=False), []),
+              ["Gliclazide 80mg tablet generic", "Gliclazide 80mg tablet generic chemist180", "Nuzide 80mg"]),
         # Title filter (titles taken from cached shopping results)
         check("Exact brand title", title_matches_brand("Dolo 650mg Strip Of 15 Tablets", "Dolo 650"), True),
         check("Dolo-650 hyphen title", title_matches_brand("Dolo-650 Tablet 15's", "Dolo 650"), True),

@@ -189,6 +189,11 @@ def pick_candidates(match: dict, found: List[dict]) -> List[str]:
     appeared in their own results (their results added other gliclazide brands through pooling).
     """
     searches = [match["generic_query"]]
+    # Chemist180 delivers free and discounts its own generics hardest; naming it surfaces brands no other
+    # query returns (Thyrorich 50 ₹0.14/tab, Pantopraz 40 ₹0.66, Atorless 10 ₹2.73 vs the pharmacy's own
+    # suggestions at ₹0.70, ₹2.25, ₹3.30). Single-salt only: for combinations it returned nothing.
+    if "+" not in match["salt_query"]:
+        searches.append(match["generic_query"] + " chemist180")
     # Google sometimes answers a short brand name with other brands only ("Pan 40 price": 24 listings,
     # none of Pan 40; "Atorbest 10 price": Atorbest 20 only). With the form word it finds them
     # ("Pan 40 tablet": 5 listings of Pan 40), so that search is added when the brand is missing.

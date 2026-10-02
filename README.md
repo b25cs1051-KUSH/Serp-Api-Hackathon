@@ -112,17 +112,27 @@ lookup of every line and how many assignments the optimiser priced. The same bas
 ## Cheaper than the pharmacies' own suggestions
 
 1mg, Chemist180 and Medplus show a "cheaper alternative" on a medicine's page. PharmaWatch has to
-beat it, or the product makes no sense. `scripts/benchmark.py` checks this on the real pipeline,
-per tablet delivered:
+beat it, or the product makes no sense. `scripts/reference_check.py` checks this on 15 common
+medicines and 4 prescriptions: it reads Chemist180's own suggestion from its product page (as a test
+reference only; the product itself uses SerpApi alone) and compares it with our cheapest
+same-composition offer, per tablet, delivered. Latest run (`scripts/reference_report.md`):
 
-| Medicine | Pharmacy's suggestion | PharmaWatch's cheapest |
+**10 of 15 at or below the pharmacy's cheapest; all 4 prescription baskets pass.**
+
+| Medicine | Chemist180's suggestion | PharmaWatch's cheapest |
 |---|---|---|
-| Dolo 650 | Paracip 650 @ Chemist180, ₹1.39 | Paracip 650 @ Chemist180, ₹1.39 (₹1.08 at Netmeds once an order clears its ₹500 threshold) |
-| Stamlo 5 | Amlip 5 @ Chemist180, ₹1.35 | **Amodep 5 @ Chemist180, ₹1.01** |
-| Atorbest 10 | Lipvas 10 @ Chemist180, ₹3.30 | **Torvason 10 @ Chemist180, ₹2.14** |
+| Thyronorm 50 | Thiroace 50, ₹0.70 | **Thyrorich 50 @ Chemist180, ₹0.14** |
+| Pan 40 | Prasopheg 40, ₹2.25 | **Pantopraz 40 @ Chemist180, ₹0.66** |
+| Stamlo 5 | Amlip 5, ₹1.35 | **Amodep 5 @ Chemist180, ₹1.01** |
+| Atorbest 10 | Lipvas 10, ₹3.30 | **Atorless 10 @ Chemist180, ₹2.73** |
+| Azithral 500 | Azikem 500, ₹18.12 | **Azivent 500 @ Chemist180, ₹14.78** |
+| Dolo 650 | Paracip 650, ₹1.39 | Paracip 650 @ Chemist180, ₹1.39 |
+| Rosuvas 10 | Rosemicor 10, ₹2.25 | Rosudac 10, ₹2.94 (miss) |
+| Montair LC, Glycomet GP 2, Pantocid DSR, Amlokind AT | Chemist180's combination generics | miss: Google Shopping didn't list them for any query we tried |
 
-How: besides the main search, each medicine gets two searches chosen for reach (see
-[problem 12](#12-the-pharmacies-favourite-generics-are-cheap-only-after-discount)).
+How: besides the main search, each medicine gets up to three searches chosen for reach (see
+[problem 12](#12-the-pharmacies-favourite-generics-are-cheap-only-after-discount) and
+[problem 15](#15-a-pharmacys-own-generics-show-up-only-when-you-name-the-pharmacy)).
 
 ## Medicine data
 
@@ -361,12 +371,25 @@ not compare it.
 tablet": 5 listings of Pan 40; "Atorbest 10 tablet": 6). In a 5-medicine prescription this turned
 "compared on 3 of 5 medicines" into all 5: ₹560.00 as prescribed vs ₹415.16 cheapest.
 
+### 15. A pharmacy's own generics show up only when you name the pharmacy
+
+Chemist180's suggested alternatives for Pan 40, Thyronorm 50 and Rosuvas 10 were its own discounted
+generics (Prasopheg 40, Thiroace 50, Rosemicor 10), and none appeared in any of our searches; their
+makers have nothing in common, so no rule over the index predicts them. Google Shopping does list
+them, only for the right words: "Pantoprazole 40mg tablet generic chemist180" returned Pantopraz 40 at
+₹0.66/tablet, a third of the pharmacy's own suggestion.
+
+**Fix:** single-salt medicines get that search too. Measured on 15 medicines, it raised the
+reference check from 6 to 10 passes. Combinations stay a gap: the same wording returned nothing for
+them, and naming the brand ("Amlokind AT chemist180") finds only the brand itself.
+
 ## What one search costs
 
 | Call | SerpApi credits | When |
 |---|---|---|
 | Main search | 1 | Always, unless cached (24 h) |
 | Generic salt search | 1 | "Amlodipine 5mg tablet generic" for Stamlo 5 |
+| Chemist180 generic search | 0–1 | "Amlodipine 5mg tablet generic chemist180"; single-salt medicines only |
 | Brand retry | 0–1 | Only when Google's answer to a brand has none of it ("Pan 40" → "Pan 40 tablet") |
 | Discounted-generic brand | 1 | The Cipla brand of the salt with the largest family ("Paracip 650"); for a salt search without one, the brand with the widest maker range |
 | Product-page links, main list | up to 5 | Only the top 5 real matches, only when links are on |
@@ -374,7 +397,7 @@ tablet": 5 listings of Pan 40; "Atorbest 10 tablet": 6). In a 5-medicine prescri
 | Gemini | 0 SerpApi credits | Only for misspellings with several possible readings, then cached |
 | A search without a strength ("paracetamol") | 0 | The user picks a strength first |
 
-A new medicine costs at most 11 credits, and **3** with links off. Repeating it within 24 hours
+A new medicine costs at most 12 credits, and **4** with links off (3 for a combination). Repeating it within 24 hours
 costs **0**, and a later search that shares a salt reuses the cached searches. A prescription costs
 the sum of its new medicines, with links resolved only for the offers the basket picked.
 
@@ -568,6 +591,7 @@ python scripts/test_p5_generics.py --llm "dollo 650" "Telma 40 H"          # Gem
 python scripts/test_p5_generics.py "Stamlo 5" 110001 --cache-only          # replay from Redis, 0 credits
 python scripts/test_p5_generics.py "Stamlo 5" 110001                       # live run, full call log
 python scripts/benchmark.py                                  # vs the pharmacies' own suggestions (live, cached = 0)
+python scripts/reference_check.py                            # 15 medicines + 4 prescriptions vs Chemist180's suggestions
 python scripts/live_prescription.py "Dolo 650 x30" "Stamlo 5"               # a whole prescription, live
 ```
 
@@ -620,7 +644,8 @@ docker-compose.yml      Redis + API + UI, with healthchecks (api/Dockerfile, web
 - **Two salts per product.** The dataset stores at most two salts, so a three-salt combination is keyed
   on two. Titles still go through the combination guards (variant letters, second doses).
 - **Google decides which brands appear.** Alternatives are the same-salt brands Google Shopping lists
-  for the brand and salt searches. A cheap brand that Google doesn't show is not compared.
+  for our searches. A cheap brand that Google doesn't show for them is not compared; combination
+  generics are the weakest case (4 of the 5 misses in the reference check).
 - **Delivery fees** come from each pharmacy's published rules and can change.
 
 ---
