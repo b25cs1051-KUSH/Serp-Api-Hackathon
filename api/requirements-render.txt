@@ -1,0 +1,11 @@
+# Hosted API (api/Dockerfile.render): the same code without PyTorch, to fit a 512 MB instance.
+# EMBEDDING_BACKEND=onnx runs all-MiniLM-L6-v2 with onnxruntime (identical vectors, see scripts/test_hosting.py).
+serpapi>=1.1.0
+redis>=5.0.0
+numpy>=1.26.0
+python-dotenv>=1.0.0
+onnxruntime>=1.18
+tokenizers>=0.19
+huggingface_hub>=0.23
+fastapi>=0.110
+uvicorn[standard]>=0.29

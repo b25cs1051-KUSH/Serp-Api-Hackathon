@@ -1,0 +1,60 @@
+# Render Blueprint: PharmaWatch on Render's free plan (New → Blueprint → this repo).
+#   pharmawatch-cache  Key Value (Redis-compatible), 25 MB, internal only
+#   pharmawatch-api    FastAPI, api/Dockerfile.render (no PyTorch: ~180 MB idle, ~250 MB under load)
+#   pharmawatch-web    Next.js standalone server
+# Keys are entered in the Render dashboard (sync: false); they are never in this file or an image.
+# Free web services sleep after 15 min idle; the first request after that takes about a minute.
+# If Render gives a service a different URL than below, update UI_ORIGINS and NEXT_PUBLIC_API_URL
+# (then redeploy pharmawatch-web: the API URL is fixed at build time).
+
+services:
+  - type: keyvalue
+    name: pharmawatch-cache
+    plan: free
+    region: singapore
+    ipAllowList: []               # no outside access; the API connects over Render's private network
+    maxmemoryPolicy: allkeys-lru  # a full cache drops its oldest entries instead of refusing writes
+
+  - type: web
+    name: pharmawatch-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: .
+    dockerfilePath: ./api/Dockerfile.render
+    healthCheckPath: /api/health
+    envVars:
+      - key: REDIS_HOST
+        fromService: { type: keyvalue, name: pharmawatch-cache, property: host }
+      - key: REDIS_PORT
+        fromService: { type: keyvalue, name: pharmawatch-cache, property: port }
+      - key: SERP_API_KEY
+        sync: false
+      - key: SERP_API_KEY_2
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SERPAPI_ROTATE_KEYS      # key 1 out of searches → key 2
+        value: "1"
+      - key: DAILY_CREDIT_BUDGET      # SerpApi calls per UTC day; a new medicine costs about 4
+        value: "30"
+      - key: MAX_CONCURRENT_SEARCHES  # free instances get a fraction of a CPU
+        value: "3"
+      - key: UI_ORIGINS
+        value: https://pharmawatch-web.onrender.com
+
+  - type: web
+    name: pharmawatch-web
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: web
+    buildCommand: npm ci && npm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
+    startCommand: node .next/standalone/server.js
+    envVars:
+      - key: NEXT_PUBLIC_API_URL      # read by the browser, fixed at build time
+        value: https://pharmawatch-api.onrender.com
+      - key: HOSTNAME                 # listen on all interfaces, not the container's hostname
+        value: 0.0.0.0
+      - key: NODE_VERSION
+        value: "22"
