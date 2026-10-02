@@ -160,6 +160,53 @@ def check_thin_result_ttl() -> list:
     ]
 
 
+def check_key_safety_and_reconnect() -> list:
+    """The SerpApi key never appears in an error; a passthrough cache reconnects once Redis is back."""
+    import serpapi
+    from serpapi_cache import cache as cache_mod
+    from serpapi_cache.cache import SerpApiError, redact
+
+    class Fails:
+        def __init__(self, **kw): pass
+        def search(self, params): raise RuntimeError("429 for url: https://serpapi.com/search?q=x&api_key=SECRET123")
+
+    real_client, real_backend = serpapi.Client, cache_mod.RedisBackend
+    serpapi.Client = Fails
+    c = SerpApiCache(api_key="SECRET123", backend=DictBackend(), verbose=False)
+    try:
+        c._call_serpapi({"q": "x"})
+        leaked = "no error"
+    except SerpApiError as e:
+        import traceback
+        leaked = "SECRET123" in str(e) or "SECRET123" in traceback.format_exc()
+    finally:
+        serpapi.Client = real_client
+
+    class Down:
+        def __init__(self, host, port): raise ConnectionError("refused")
+
+    class Up:
+        def __init__(self, host, port): pass
+
+    try:
+        cache_mod.RedisBackend = Down
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            p = SerpApiCache(api_key="x", verbose=False)
+        start = p.backend is None
+        cache_mod.RedisBackend = Up
+        too_soon = p.reconnect_if_needed()
+        p._next_reconnect = 0
+        back = p.reconnect_if_needed()
+    finally:
+        cache_mod.RedisBackend = real_backend
+    return [
+        check("redact masks api_key in a URL", redact("x?q=a&api_key=SECRET123&b=1"), "x?q=a&api_key=***&b=1"),
+        check("SerpApi error never carries the key (message or traceback)", leaked, False),
+        check("passthrough cache reconnects after the retry window", (start, too_soon, back), (True, False, True)),
+    ]
+
+
 def check_async_store() -> list:
     """A miss returns before its (slow) Redis write finishes; the next identical search still hits."""
     class SlowBackend(DictBackend):
@@ -464,6 +511,7 @@ def run_checks() -> bool:
         check("Stores without links ignored", pick_store_link([{"name": "1mg"}], "1mg"), None),
     ]
     results += check_exact_only_cache()
+    results += check_key_safety_and_reconnect()
     results += check_params_signature()
     results += check_thin_result_ttl()
     results += check_async_store()

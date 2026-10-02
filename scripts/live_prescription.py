@@ -1,6 +1,6 @@
 """
 live_prescription.py — run a whole prescription through the real pipeline and print the basket.
-Uses SERP_API_KEY_2 when set (test key). Cached searches cost 0.
+Uses SERP_API_KEY_2 (test key); without it, it stops unless ALLOW_MAIN_KEY=1. Cached searches cost 0.
 
     python scripts/live_prescription.py "Stamlo 5" "Dolo 650 x30" "Atorbest 10" "paracetamol"
     (append "xN" for a tablet count)
@@ -22,6 +22,9 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(os.path.join(ROOT, ".env"))
 if os.getenv("SERP_API_KEY_2"):
     os.environ["SERP_API_KEY"] = os.environ["SERP_API_KEY_2"]
+elif os.getenv("ALLOW_MAIN_KEY") != "1":
+    sys.exit("SERP_API_KEY_2 (test key) is not set. Live checks spend real credits; "
+             "set ALLOW_MAIN_KEY=1 to use SERP_API_KEY instead.")
 warnings.simplefilter("ignore")
 
 from pharmawatch.prescription import prescription_stream  # noqa: E402

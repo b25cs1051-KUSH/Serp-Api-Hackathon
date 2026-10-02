@@ -97,6 +97,22 @@ def _normalize_q(q: str) -> str:
     return _UNIT_SPACING.sub(r"\1\2", q)
 
 
+_KEY_IN_TEXT_RE = re.compile(r"(api_key=)[^&\s'\"]+", re.I)
+
+
+def redact(text) -> str:
+    """Text with any 'api_key=...' value masked. HTTP errors from the SerpApi client quote the request
+    URL, key included; such text must never reach a log, a browser or an MCP client."""
+    return _KEY_IN_TEXT_RE.sub(r"\1***", str(text))
+
+
+class SerpApiError(RuntimeError):
+    """A failed SerpApi request (HTTP error, timeout, quota). The message never contains the key."""
+
+
+RECONNECT_EVERY_S = 30.0
+
+
 def _cache_params(params: dict) -> dict:
     """Params as the cache sees them (key + embedding). SerpApi still gets the originals."""
     if "q" not in params:
@@ -164,6 +180,9 @@ class SerpApiCache:
         self.verbose = verbose
 
         # ── Backend — Redis with passthrough fallback ────────────
+        self._auto_backend = backend is None      # we connected it ourselves, so we may reconnect it
+        self._reconnect_lock = threading.Lock()
+        self._next_reconnect = 0.0
         if backend is not None:
             # Caller passed an explicit backend — use it, let errors propagate
             self.backend: Optional[BaseBackend] = backend
@@ -180,6 +199,7 @@ class SerpApiCache:
                     stacklevel=2,
                 )
                 self.backend = None
+                self._next_reconnect = time.monotonic() + RECONNECT_EVERY_S
 
         # ── Embedding model (lazy-loaded on first use) ────────────
         self._model_name = embedding_model
@@ -244,7 +264,9 @@ class SerpApiCache:
 
     def _search(self, params: dict, ttl: Optional[int], exact_only: bool,
                 ttl_for: Optional[Callable[[dict], Optional[int]]] = None) -> tuple[str, dict]:
-        # Passthrough mode — Redis unavailable
+        # Passthrough mode — Redis unavailable (retried every RECONNECT_EVERY_S)
+        if self.backend is None:
+            self.reconnect_if_needed()
         if self.backend is None:
             if self.verbose:
                 query_text = self._params_to_query_string(params)
@@ -316,6 +338,26 @@ class SerpApiCache:
         self._store_async(cache_key, result, embedding, effective_ttl, query_text, is_text_query, params_sig)
 
         return "api_call", result
+
+    def reconnect_if_needed(self) -> bool:
+        """
+        In passthrough mode, try Redis again (at most every RECONNECT_EVERY_S). Without this, a cache
+        created while Redis was down stayed in passthrough after Redis came back, and every search paid
+        SerpApi. Only for a backend this cache connected itself. Returns True when Redis is available.
+        """
+        if self.backend is not None:
+            return True
+        if not self._auto_backend or time.monotonic() < self._next_reconnect:
+            return False
+        with self._reconnect_lock:
+            if self.backend is None and time.monotonic() >= self._next_reconnect:
+                self._next_reconnect = time.monotonic() + RECONNECT_EVERY_S
+                host, port = os.getenv("REDIS_HOST", "localhost"), int(os.getenv("REDIS_PORT", "6379"))
+                try:
+                    self.backend = RedisBackend(host=host, port=port)
+                except Exception:
+                    pass
+        return self.backend is not None
 
     def wait_for_writes(self, timeout: Optional[float] = None) -> None:
         """Block until every background Redis store has finished."""
@@ -475,7 +517,11 @@ class SerpApiCache:
 
         # The client's default is no timeout: one hung request would block its search forever.
         client = serpapi.Client(api_key=self.api_key, timeout=float(os.getenv("SERPAPI_TIMEOUT", "30")))
-        result = client.search({**params})
+        try:
+            result = client.search({**params})
+        except Exception as e:
+            # `from None`: the original exception (and its traceback) quotes the URL with the key.
+            raise SerpApiError(redact(f"{type(e).__name__}: {e}")) from None
         return dict(result)
 
     @staticmethod

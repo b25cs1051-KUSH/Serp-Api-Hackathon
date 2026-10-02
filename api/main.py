@@ -60,6 +60,7 @@ from pharmawatch.pipeline import search_medicine_stream
 from pharmawatch.prescription import MAX_LINES, prescription_stream
 from pharmawatch.search import SHOPPING_PARAMS, _get_cache, warm_up
 from serpapi_cache.backends import RedisBackend
+from serpapi_cache.cache import redact
 
 load_dotenv()
 
@@ -129,8 +130,10 @@ app.add_middleware(
 # ─────────────────────────────────────────────
 
 def _redis():
-    """Raw Redis client (read-only use), or None when Redis is down."""
-    backend = _get_cache(verbose=False).backend
+    """Raw Redis client (read-only use), or None when Redis is down (a reconnect is tried first)."""
+    cache = _get_cache(verbose=False)
+    cache.reconnect_if_needed()
+    backend = cache.backend
     return getattr(backend, "_r", None) if backend is not None else None
 
 
@@ -364,7 +367,7 @@ def _start_search(query: str, pin: str, links: bool, llm: bool, items: Optional[
                 handle["stages"].put((name, payload))
             handle["stages"].put(("__done__", None))
         except Exception as e:
-            handle["stages"].put(("__error__", f"{type(e).__name__}: {e}"))
+            handle["stages"].put(("__error__", redact(f"{type(e).__name__}: {e}")))  # never the key
         finally:
             with _running_lock:
                 _running["pipelines"] -= 1

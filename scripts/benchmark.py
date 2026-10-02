@@ -4,7 +4,7 @@ alternative" the pharmacies themselves suggest? Targets are shelf prices per tab
 Chemist180 and Medplus product pages (Sept 2026).
 
 Compared on the price per tablet *delivered* (the product ranks by it; Chemist180 ships free, so
-its shelf price is its delivered price). Runs the real pipeline (links off). Uses SERP_API_KEY_2 when set, so demo credits stay untouched.
+its shelf price is its delivered price). Runs the real pipeline (links off). Uses SERP_API_KEY_2 (test key); without it, it stops unless ALLOW_MAIN_KEY=1.
 Everything already cached costs 0.
 
     python scripts/benchmark.py
@@ -25,6 +25,9 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(os.path.join(ROOT, ".env"))
 if os.getenv("SERP_API_KEY_2"):
     os.environ["SERP_API_KEY"] = os.environ["SERP_API_KEY_2"]
+elif os.getenv("ALLOW_MAIN_KEY") != "1":
+    sys.exit("SERP_API_KEY_2 (test key) is not set. Live checks spend real credits; "
+             "set ALLOW_MAIN_KEY=1 to use SERP_API_KEY instead.")
 warnings.simplefilter("ignore")
 
 from pharmawatch.pipeline import search_medicine_stream  # noqa: E402

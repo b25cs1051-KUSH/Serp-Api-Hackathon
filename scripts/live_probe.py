@@ -2,7 +2,7 @@
 live_probe.py — try Google Shopping queries for a medicine and show which same-composition
 brands each one surfaces, cheapest shelf price per tablet first. Spends 1 credit per uncached query.
 
-Uses SERP_API_KEY_2 when it is set (test key), so demo credits on SERP_API_KEY stay untouched.
+Uses SERP_API_KEY_2 (test key); without it, it stops unless ALLOW_MAIN_KEY=1.
 
     python scripts/live_probe.py "Dolo 650" "Cipla Paracetamol 650mg" "Paracip 650"
     (first argument: the medicine whose composition is used; the rest: queries to run)
@@ -22,6 +22,9 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(os.path.join(ROOT, ".env"))
 if os.getenv("SERP_API_KEY_2"):
     os.environ["SERP_API_KEY"] = os.environ["SERP_API_KEY_2"]
+elif os.getenv("ALLOW_MAIN_KEY") != "1":
+    sys.exit("SERP_API_KEY_2 (test key) is not set. Live checks spend real credits; "
+             "set ALLOW_MAIN_KEY=1 to use SERP_API_KEY instead.")
 warnings.simplefilter("ignore")
 
 from pharmawatch.generics import _prepare, find_composition, group_matcher, ranked_listings  # noqa: E402
