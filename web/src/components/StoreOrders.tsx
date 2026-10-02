@@ -12,8 +12,8 @@ export default function StoreOrders({ plan, items }: { plan: BasketPlan; items: 
         <StoreOrder key={s.platform} store={s} items={items} />
       ))}
       <p className="px-1 text-xs text-faint">
-        Pharmacies don&apos;t let other sites fill their carts, so &ldquo;Open product pages&rdquo; opens each page in a new tab
-        (allow pop-ups if your browser asks); add the quantity shown on each.
+        Pharmacies don&apos;t let other sites fill their carts. The open button takes you through each product page in turn, one
+        tab per click; add the quantity shown on each.
       </p>
     </div>
   );
@@ -21,8 +21,13 @@ export default function StoreOrders({ plan, items }: { plan: BasketPlan; items: 
 
 function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
   const [copied, setCopied] = useState(false);
-  const [blocked, setBlocked] = useState(0);
-  const links = store.lines.map(buyLink).filter((u): u is string => Boolean(u));
+  const [opened, setOpened] = useState(0);
+  const links = store.lines.flatMap((o) => {
+    const href = buyLink(o);
+    return href ? [{ brand: o.brand, href }] : [];
+  });
+  const step = opened < links.length ? opened : 0; // the plan may change under us
+  const next = links[step];
   const list = [
     `${store.platform}:`,
     ...store.lines.map(
@@ -105,23 +110,19 @@ function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {links.length > 0 && (
+        {next && (
           <button
             type="button"
             onClick={() => {
-              // window.open returns null for a tab the pop-up blocker stopped.
-              const opened = links
-                .map((u) => {
-                  const w = window.open(u, "_blank");
-                  if (w) w.opener = null; // like noopener (which would make window.open return null)
-                  return w;
-                })
-                .filter(Boolean).length;
-              setBlocked(links.length - opened);
+              // One tab per click: browsers block every extra tab opened by a single click.
+              const w = window.open(next.href, "_blank");
+              if (w) w.opener = null;
+              setOpened((step + 1) % links.length);
             }}
             className="flex items-center gap-1.5 rounded-lg bg-hit px-3 py-2 text-sm font-semibold text-bg hover:brightness-110"
           >
-            <ExternalLink className="h-4 w-4" /> Open {links.length} product page{links.length === 1 ? "" : "s"}
+            <ExternalLink className="h-4 w-4" /> Open {next.brand}
+            {links.length > 1 && <span className="font-normal opacity-80">({step + 1} of {links.length})</span>}
           </button>
         )}
         <button
@@ -133,12 +134,6 @@ function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
           {copied ? "Copied" : "Copy shopping list"}
         </button>
       </div>
-      {blocked > 0 && (
-        <p className="mt-2 text-xs text-miss">
-          Your browser blocked {blocked} of the {links.length} tabs. Allow pop-ups for this site and click again, or use the Buy
-          links above.
-        </p>
-      )}
     </div>
   );
 }
