@@ -514,6 +514,16 @@ def run_checks() -> bool:
         check("Pharmacy not among stores → None (no other store's link)", pick_store_link(stores, "PharmEasy"), None),
         check("No target → first store", pick_store_link(stores, None), "https://www.1mg.com/drugs/x"),
         check("Stores without links ignored", pick_store_link([{"name": "1mg"}], "1mg"), None),
+        # Live run: a 'Pantodac-DSR' offer's 1mg link was Pantoder DSR's page.
+        check("Link to another product rejected",
+              pipeline.names_product("https://www.1mg.com/drugs/pantoder-dsr-capsule-1109188",
+                                     {"brand": "Pantodac DSR", "medicine_name": "Pantodac-DSR 15 Capsules"}), False),
+        check("Brand found past the maker's name",
+              pipeline.names_product("https://www.dawaadost.com/hi/medicine/dolo-650mg-tablet-15s",
+                                     {"brand": "Dolo 650", "medicine_name": "Micro Labs Dolo 650mg Tablets 15s"}), True),
+        check("Encoded slug still matches",
+              pipeline.names_product("https://www.medplusmart.com/product/fepanil%252525252d650mg%252525252dtab_FEPA0008",
+                                     {"medicine_name": "Fepanil 650mg Tab"}), True),
     ]
     results += check_exact_only_cache()
     results += check_key_safety_and_reconnect()

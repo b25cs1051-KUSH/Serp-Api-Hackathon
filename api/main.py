@@ -99,7 +99,7 @@ _running_lock = threading.Lock()
 _running = {"pipelines": 0}
 _readers: dict[int, float] = {}   # id(stream) → its t0 (perf_counter)
 
-# link_id → (page token, platform, fallback search link) for product pages resolved on click.
+# link_id → (listing fields the lookup needs, fallback search link) for product pages resolved on click.
 MAX_LINKS = 20000
 _links: "OrderedDict[str, tuple]" = OrderedDict()
 _links_lock = threading.Lock()
@@ -174,7 +174,9 @@ def _register_link(row: dict) -> Optional[str]:
         return None
     link_id = hashlib.sha1(f"{token}|{row.get('platform')}".encode()).hexdigest()[:16]
     with _links_lock:
-        _links[link_id] = (token, row.get("platform"), row.get("search_link") or row.get("google_link") or "")
+        _links[link_id] = ({"page_token": token, "platform": row.get("platform"), "brand": row.get("brand"),
+                            "medicine_name": row.get("medicine_name")},
+                           row.get("search_link") or row.get("google_link") or "")
         _links.move_to_end(link_id)
         while len(_links) > MAX_LINKS:
             _links.popitem(last=False)
@@ -551,9 +553,10 @@ def open_link(link_id: str):
         entry = _links.get(link_id)
     if entry is None:
         raise HTTPException(404, "This link has expired. Run the search again.")
-    token, platform, fallback = entry
+    row, fallback = entry
+    platform = row["platform"]
     try:
-        url = _fetch_direct_link({"page_token": token, "platform": platform})
+        url = _fetch_direct_link(row)
     except Exception as e:
         log.warning("link %s (%s) failed: %s", link_id, platform, redact(f"{type(e).__name__}: {e}"))
         url = ""
