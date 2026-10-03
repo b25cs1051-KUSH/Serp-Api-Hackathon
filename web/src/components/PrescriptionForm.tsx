@@ -132,7 +132,7 @@ export default function PrescriptionForm({
         </button>
       </div>
       <p className="px-1 text-[11px] text-faint">
-        Up to {MAX_LINES} medicines. Leave tablets empty to buy one pack. Every medicine is searched at the same time.
+        Up to {MAX_LINES} medicines. Leave the count empty to buy one pack (or one bottle/tube). Every medicine is searched at the same time.
       </p>
     </form>
   );

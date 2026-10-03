@@ -68,8 +68,22 @@ def _is_prescribed(brand: str, match: Optional[dict], query: str) -> bool:
     return set(_tokens(brand)) == set(_tokens(match["matched_brand"]))
 
 
+def is_item_line(by_brand: Dict[str, List[dict]]) -> bool:
+    """
+    No listing states a tablet count (syrups, creams, drops, inhalers...): such a product is bought
+    by the item (bottle, tube), one listing = one item.
+    """
+    rows = [r for rows in by_brand.values() for r in rows]
+    return bool(rows) and all(not r.get("pack_size") for r in rows)
+
+
 def tablets_needed(line: dict, by_brand: Dict[str, List[dict]], match: Optional[dict]) -> Tuple[Optional[int], str]:
-    """(tablets, how): the typed count, else one pack of the prescribed medicine's cheapest offer."""
+    """
+    (count, how): tablets typed, else one pack of the prescribed medicine's cheapest offer. For an
+    item line the count is items: the typed number ("items"), else one ("one item").
+    """
+    if is_item_line(by_brand):
+        return (int(line["tablets"]), "items") if line.get("tablets") else (1, "one item")
     if line.get("tablets"):
         return int(line["tablets"]), "typed"
     prescribed = [r for b, rows in by_brand.items() if _is_prescribed(b, match, line["query"]) for r in rows]
@@ -82,31 +96,36 @@ def tablets_needed(line: dict, by_brand: Dict[str, List[dict]], match: Optional[
 def build_offers(line: dict, pooled: List[dict], match: Optional[dict]) -> dict:
     """
     {"tablets", "tablets_how", "offers": [...]} — one offer per brand × pharmacy (its cheapest way to
-    cover the tablets). Offer: brand, platform, packs, pack_size, pack_estimated, price_inr (per pack),
-    item_cost (packs × price), per_tablet, prescribed, medicine_name, manufacturer, links.
+    cover the tablets). Offer: brand, platform, unit ("tablet", or "item" for syrups/creams: one listing
+    = one item, pack_size 1), packs, pack_size, pack_estimated, price_inr (per pack), item_cost
+    (packs × price), per_tablet (per item for items), prescribed, medicine_name, manufacturer, links.
     """
     by_brand = _prepared_by_brand(pooled, match, line["query"])
     tablets, how = tablets_needed(line, by_brand, match)
+    unit = "item" if how in ("items", "one item") else "tablet"
     offers = []
     if tablets:
         for brand, rows in by_brand.items():
             best_per_store: Dict[str, dict] = {}
             for r in rows:
-                if not r.get("pack_size") or r.get("delivery_status") not in _DELIVERABLE:
+                pack = 1 if unit == "item" else r.get("pack_size")
+                if not pack or r.get("delivery_status") not in _DELIVERABLE:
                     continue
-                packs = math.ceil(tablets / r["pack_size"])
+                packs = math.ceil(tablets / pack)
                 cost = round(packs * r["price_inr"], 2)
+                estimated = unit == "tablet" and bool(r["pack_estimated"])
                 cur = best_per_store.get(r["platform"])
-                if cur is None or (cost, r["pack_estimated"]) < (cur["item_cost"], cur["pack_estimated"]):
+                if cur is None or (cost, estimated) < (cur["item_cost"], cur["pack_estimated"]):
                     best_per_store[r["platform"]] = {
                         "brand": brand,
                         "platform": r["platform"],
+                        "unit": unit,
                         "packs": packs,
-                        "pack_size": r["pack_size"],
-                        "pack_estimated": bool(r["pack_estimated"]),
+                        "pack_size": pack,
+                        "pack_estimated": estimated,
                         "price_inr": r["price_inr"],
                         "item_cost": cost,
-                        "per_tablet": round(cost / (packs * r["pack_size"]), 2),
+                        "per_tablet": round(cost / (packs * pack), 2),   # per item for an item line
                         "prescribed": _is_prescribed(brand, match, line["query"]),
                         "medicine_name": r.get("medicine_name", ""),
                         "manufacturer": r.get("manufacturer"),

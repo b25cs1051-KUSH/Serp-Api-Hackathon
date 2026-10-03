@@ -111,6 +111,27 @@ def run():
     o = basket.build_offers({"query": "Zyxoltab 5", "tablets": None}, pooled, None)
     check("no count → one pack", (o["tablets"], o["tablets_how"], o["offers"][0]["packs"]), (10, "one pack", 1))
 
+    # 7b. Syrups, creams...: no listing states a tablet count, so the line is bought by the item.
+    #     Before this, such a line had no offers and showed as "not sold online".
+    syrups = [{"medicine_name": "Aristo Ambrodil S Cough Syrup 100ml", "platform": "Dawaa Dost", "price_inr": 32.0,
+               "delivery_status": "charged"},
+              {"medicine_name": "Benadryl Cough Formula Syrup 150ml", "platform": "1mg", "price_inr": 161.82,
+               "delivery_status": "charged"}]
+    o = basket.build_offers({"query": "cough syrup", "tablets": None}, syrups, None)
+    check("syrup, no count → 1 item per pharmacy",
+          (o["tablets"], o["tablets_how"], [(x["platform"], x["unit"], x["packs"], x["item_cost"]) for x in o["offers"]]),
+          (1, "one item", [("Dawaa Dost", "item", 1, 32.0), ("1mg", "item", 1, 161.82)]))
+    o = basket.build_offers({"query": "cough syrup", "tablets": 2}, syrups, None)
+    check("syrup x2 → 2 items", (o["tablets_how"], o["offers"][0]["packs"], o["offers"][0]["item_cost"], o["offers"][0]["per_tablet"]),
+          ("items", 2, 64.0, 32.0))
+    r = basket.optimise([line("cough syrup", *[dict(x, line=0) for x in basket.build_offers(
+        {"query": "cough syrup", "tablets": None}, syrups, None)["offers"]])], PIN)
+    check("syrup line is priced, not unavailable", (r["unavailable"], r["with_swaps"]["best"]["total"]), ([], 82.0))
+    mixed = pooled + [{"medicine_name": "Zyxoltab 5 Tablet", "platform": "1mg", "price_inr": 25.0, "delivery_status": "charged", "total_landed_cost": 75.0}]
+    o = basket.build_offers({"query": "Zyxoltab 5", "tablets": None}, mixed, None)
+    check("a tablet count anywhere keeps the line in tablets", (o["tablets_how"], {x["unit"] for x in o["offers"]}),
+          ("one pack", {"tablet"}))
+
     # 8. The branch-and-bound search equals brute force on random baskets.
     rng = random.Random(7)
     platforms = ["1mg", "Chemist180", "Netmeds", "Apollo Pharmacy", "PharmEasy", "Truemeds", "SastaSundar"]

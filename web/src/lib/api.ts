@@ -168,6 +168,8 @@ export interface BasketOffer {
   line: number;
   brand: string;
   platform: string;
+  /** "item" for syrups, creams…: one listing is one bottle/tube (pack_size 1, per_tablet = per item). */
+  unit?: "tablet" | "item";
   packs: number;
   pack_size: number;
   pack_estimated: boolean;
