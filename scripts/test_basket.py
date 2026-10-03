@@ -1,8 +1,8 @@
 """
 test_basket.py — Offline checks for pharmawatch/basket.py (0 SerpApi credits).
 
-Delivery rules are the real ones for PIN 110001: 1mg free from ₹100 (else ₹50), Chemist180 always
-free, Netmeds free from ₹500 (else ₹29–39), Apollo free from ₹199 (else ₹80).
+Delivery rules are the real ones for PIN 110001: 1mg free from ₹500 (else ~₹75), Chemist180 free
+from ₹500 (else ₹100), Netmeds free from ₹500 (else ₹29–69), Apollo free from ₹199 (else ~₹75).
 
     python scripts/test_basket.py
 """
@@ -59,23 +59,23 @@ def brute_force(lines):
 
 
 def run():
-    # 1. Free-delivery threshold: both at 1mg (₹120, free from ₹100) beats the per-item cheapest split
-    #    (A at Chemist180 ₹58 + B at 1mg ₹60 + ₹50 delivery = ₹168).
-    r = basket.optimise([line("A", offer("Chemist180", 58), offer("1mg", 60)),
-                         line("B", offer("Chemist180", 65), offer("1mg", 60))], PIN)
+    # 1. Free-delivery threshold: both at 1mg (₹500, free from ₹500) beats the per-item cheapest
+    #    (both at Chemist180 ₹420 + ₹100 delivery = ₹520).
+    r = basket.optimise([line("A", offer("Chemist180", 200), offer("1mg", 250)),
+                         line("B", offer("Chemist180", 220), offer("1mg", 250))], PIN)
     best = r["with_swaps"]["best"]
-    check("threshold: one 1mg order beats the split", (best["total"], stores(best)), (120.0, [("1mg", [0, 1])]))
+    check("threshold: one 1mg order beats the split", (best["total"], stores(best)), (500.0, [("1mg", [0, 1])]))
     check("threshold: per-line cheapest alone is still reported",
           (r["per_line"][0]["cheapest_any"]["platform"], r["per_line"][1]["cheapest_any"]["platform"]),
           ("Chemist180", "Chemist180"))
-    check("single store = the same 1mg order here", r["with_swaps"]["single_store"]["total"], 120.0)
+    check("single store = the same 1mg order here", r["with_swaps"]["single_store"]["total"], 500.0)
 
-    # 2. Split beats one store when no threshold helps: Chemist180 (free) for A, Chemist180 for B.
-    r = basket.optimise([line("A", offer("Chemist180", 20), offer("Apollo Pharmacy", 15)),
-                         line("B", offer("Chemist180", 30), offer("Apollo Pharmacy", 25))], PIN)
-    check("small order: Chemist180 (free) beats Apollo (₹40 + ₹80 delivery)",
-          (r["with_swaps"]["best"]["total"], stores(r["with_swaps"]["best"])), (50.0, [("Chemist180", [0, 1])]))
-    check("fees reported", (r["with_swaps"]["best"]["fees_total"], r["with_swaps"]["best"]["items_total"]), (0.0, 50.0))
+    # 2. Small order, no threshold reached: the lower fee beats cheaper items.
+    r = basket.optimise([line("A", offer("Netmeds", 20), offer("Apollo Pharmacy", 18)),
+                         line("B", offer("Netmeds", 30), offer("Apollo Pharmacy", 28))], PIN)
+    check("small order: Netmeds (₹50 + ₹69) beats Apollo (₹46 + ~₹75)",
+          (r["with_swaps"]["best"]["total"], stores(r["with_swaps"]["best"])), (119.0, [("Netmeds", [0, 1])]))
+    check("fees reported", (r["with_swaps"]["best"]["fees_total"], r["with_swaps"]["best"]["items_total"]), (69.0, 50.0))
 
     # 3. Swapping to a same-composition generic saves money; as-prescribed keeps the brand.
     r = basket.optimise([line("Dolo 650", offer("Chemist180", 26.32), offer("Chemist180", 13.94, "Paracip 650", False))], PIN)
@@ -87,12 +87,12 @@ def run():
     r = basket.optimise([line("Dolo 650", offer("Chemist180", 26.32), offer("Chemist180", 13.94, "Paracip 650", False)),
                          line("Atorbest 10", offer("Chemist180", 21.39, "Torvason 10", False))], PIN)
     check("saving over the lines both can cover", (r["saving"], r["saving_lines"]), (12.38, [0]))
-    check("swap basket still covers every line", r["with_swaps"]["best"]["total"], 35.33)
+    check("swap basket still covers every line", r["with_swaps"]["best"]["total"], 135.33)
 
     # 4. A line nobody sells is reported, the rest is still optimised.
     r = basket.optimise([line("A", offer("Chemist180", 20)), line("Nothing")], PIN)
     check("unavailable line reported", r["unavailable"], [1])
-    check("rest still priced", r["with_swaps"]["best"]["total"], 20.0)
+    check("rest still priced", r["with_swaps"]["best"]["total"], 120.0)
 
     # 5. A pharmacy without delivery rules can't be priced, so it is left out.
     r = basket.optimise([line("A", offer("RandomShop", 5), offer("Chemist180", 20))], PIN)

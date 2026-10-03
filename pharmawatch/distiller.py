@@ -87,6 +87,7 @@ PLATFORM_NAME_PATTERNS = [
     ("medivik", "Medivik"),
     ("medizinhub", "Medizinhub"),
     ("kogland", "Kogland Commerce"),
+    ("sastasundar", "SastaSundar"),
 ]
 
 

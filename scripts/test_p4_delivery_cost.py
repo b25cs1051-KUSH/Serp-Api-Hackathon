@@ -34,22 +34,26 @@ def run_checks() -> bool:
         check("Unlisted prefix → default", lookup_zone("250001"), ("tier3", True)),
         check("Spaces allowed", lookup_zone("110 001"), ("metro", False)),
         # Threshold: free vs charged
-        check("1mg metro ₹99 → ₹50", q("1mg", 99, "110001")["delivery_fee"], 50.0),
-        check("1mg metro ₹100 → free", q("1mg", 100, "110001")["delivery_status"], "free"),
-        check("1mg gap to free", q("1mg", 70, "110001")["amount_to_free_delivery"], 30.0),
-        check("Quantity counts toward threshold", q("1mg", 60, "110001", quantity=2)["delivery_status"], "free"),
-        check("Landed = qty×price + fee", q("PharmEasy", 150, "400001", quantity=2)["total_landed_cost"], 420.0),
+        check("1mg metro ₹499 → ₹75", q("1mg", 499, "110001")["delivery_fee"], 75.0),
+        check("1mg metro ₹500 → free", q("1mg", 500, "110001")["delivery_status"], "free"),
+        check("1mg gap to free", q("1mg", 470, "110001")["amount_to_free_delivery"], 30.0),
+        check("Quantity counts toward threshold", q("1mg", 250, "110001", quantity=2)["delivery_status"], "free"),
+        check("Landed = qty×price + fee", q("PharmEasy", 150, "400001", quantity=2)["total_landed_cost"], 375.0),
+        check("Unpublished fee shown as estimate", q("Apollo", 100, "110001")["delivery_label"],
+              "~₹75 delivery (estimated fee) · add ₹99 more for FREE delivery"),
         # Slabs (Netmeds metro)
-        check("Netmeds ₹200 → ₹39", q("Netmeds", 200, "110001")["delivery_fee"], 39.0),
+        check("Netmeds ₹200 → ₹69", q("Netmeds", 200, "110001")["delivery_fee"], 69.0),
         check("Netmeds ₹300 → ₹29", q("Netmeds", 300, "110001")["delivery_fee"], 29.0),
         check("Netmeds ₹500 → free", q("Netmeds", 500, "110001")["delivery_label"], "FREE delivery (order ≥ ₹500)"),
-        check("Netmeds tier3 flat ₹40", q("Netmeds", 200, "250001")["delivery_fee"], 40.0),
+        check("Netmeds tier3 same slabs", q("Netmeds", 300, "250001")["delivery_fee"], 29.0),
         check("Magicine ₹4000 prepaid slab", q("Magicine Pharma", 4000, "110001")["delivery_label"],
               "₹69 delivery (prepaid only) · no free-delivery offer"),
         # Platform fee
-        check("Truemeds ₹11 platform fee", q("Truemeds", 100, "110001")["total_landed_cost"], 150.0),
+        check("Truemeds ₹11 platform fee", q("Truemeds", 100, "110001")["total_landed_cost"], 160.0),
         # Always-free, pickup, unserviceable, unknown
-        check("Chemist180 always free", q("Chemist180", 10, "110001")["delivery_label"], "FREE delivery on every order"),
+        check("Chemist180 courier below ₹500", q("Chemist180", 10, "110001")["delivery_fee"], 100.0),
+        check("Chemist180 free from ₹500", q("Chemist180", 500, "110001")["delivery_label"], "FREE delivery (order ≥ ₹500)"),
+        check("SastaSundar ₹75 below ₹750", q("SastaSundar", 100, "700001")["delivery_fee"], 75.0),
         check("Medplus metro ₹0 fee", q("Medplus", 10, "110001")["delivery_label"], "FREE delivery on every order"),
         check("Medplus tier3 pickup only", q("Medplus", 100, "250001")["delivery_status"], "pickup_only"),
         check("Andaman unserviceable", q("1mg", 500, "744101")["total_landed_cost"], None),
@@ -65,14 +69,14 @@ def run_checks() -> bool:
         results.append(check("Invalid PIN raises", "ValueError", "ValueError"))
 
     listings = [
-        {"platform": "PharmEasy", "price_inr": 90.0},   # 90 + 120 = 210
-        {"platform": "1mg", "price_inr": 120.0},        # 120 + 50 = 170
+        {"platform": "PharmEasy", "price_inr": 90.0},   # 90 + 75 = 165
+        {"platform": "1mg", "price_inr": 120.0},        # 120 + 75 = 195
         {"platform": "Medplus", "price_inr": 10.0},     # pickup only in tier3
         {"platform": "RandomShop", "price_inr": 5.0},   # unknown
     ]
     ranked = rank_by_landed_price(listings, "250001")
     results.append(check("Ranking order", [r["platform"] for r in ranked],
-                         ["1mg", "PharmEasy", "Medplus", "RandomShop"]))
+                         ["PharmEasy", "1mg", "Medplus", "RandomShop"]))
     results.append(check("Cheapest flag", [r["is_cheapest"] for r in ranked], [True, False, False, False]))
     return all(results)
 
