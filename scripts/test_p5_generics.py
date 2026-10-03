@@ -329,9 +329,9 @@ def check_stamlo_pipeline() -> list:
     failed = dict(run("Stamlo 5", failing="Amtas 5"))   # one substitute search errors
     return [
         check("Typo: main list uses the corrected name at once", titles(typo["main"]),
-              ["Stamlo-5 Tablet 30's", "Stamlo 5MG Tablet"]),
+              ["Stamlo 5MG Tablet", "Stamlo-5 Tablet 30's"]),
         check("Typo: pooled like any search", titles(typo["main_update"]),
-              ["Stamlo 5Mg Strip Of 30 Tablets", "Stamlo-5 Tablet 30's", "Stamlo 5MG Tablet"]),
+              ["Stamlo 5MG Tablet", "Stamlo-5 Tablet 30's", "Stamlo 5Mg Strip Of 30 Tablets"]),
         check("Not in catalogue: main + links still sent, alternatives None",
               [(k, v is None) for k, v in outside], [("main", False), ("alternatives", True), ("main_links", False)]),
         # Amlopres 5 is only listed in the Amtas search here, so it goes too; the rest carries on.
@@ -340,22 +340,20 @@ def check_stamlo_pipeline() -> list:
               (["Amtas 5", "Amlopres 5"], ["Amlokind 5"])),
     ] + [
         check("Event order", [k for k, _ in events], ["main", "main_update", "alternatives", "main_links"]),
-        check("Main: look-alikes dropped", titles(got["main"]), ["Stamlo-5 Tablet 30's", "Stamlo 5MG Tablet"]),
+        check("Main: look-alikes dropped", titles(got["main"]), ["Stamlo 5MG Tablet", "Stamlo-5 Tablet 30's"]),
         check("Main update: Stamlo from Amlokind search added", "Stamlo 5Mg Strip Of 30 Tablets" in titles(got["main_update"]), True),
-        # Single strips: delivery fees decide, so PharmEasy's free-delivery 30-strip is the reference.
-        check("Reference = PharmEasy 30-strip (Amlokind search)",
+        check("Reference = Chemist180, pack estimated",
               (alt["reference"]["platform"], alt["reference"]["pack_size"], alt["reference"]["pack_estimated"]),
-              ("PharmEasy", 30, False)),
-        check("Cheaper: Amlokind @ Apollo (free delivery)",
-              (cheaper.get("brand"), cheaper.get("platform")), ("Amlokind 5", "Apollo Pharmacy")),
-        check("Cheaper alt has its direct link", cheaper.get("direct_link"), "https://Apollo%20Pharmacy/t-amlokind-apollo"),
-        check("Amlopres found via pooling (Amtas search)", by_brand.get("Amlopres 5", {}).get("platform"), "Kogland Commerce"),
-        check("Not-cheaper alt: direct_link empty", by_brand.get("Amlopres 5", {}).get("direct_link"), ""),
+              ("Chemist180", 30, True)),
+        check("Cheaper: Amlopres @ Kogland, found via pooling (Amtas search)",
+              (cheaper.get("brand"), cheaper.get("platform")), ("Amlopres 5", "Kogland Commerce")),
+        check("Cheaper alt has its direct link", cheaper.get("direct_link"), "https://Kogland%20Commerce/t-amlopres-kog"),
+        check("Not-cheaper alt: direct_link empty", by_brand.get("Amlokind 5", {}).get("direct_link"), ""),
         check("Amtas genuinely not found", alt["not_found"], ["Amtas 5"]),
         check("Main links on all top rows", all(main_links.values()), True),
         check("No link spent on look-alikes", sorted(t for t in requested if t in ("t-esta", "t-bis", "t-at")), []),
         check("Link lookups made", link_calls,
-              sorted(["t-stamlo-c180", "t-stamlo-apollo", "t-stamlo-pe", "t-amlokind-apollo"])),
+              sorted(["t-stamlo-c180", "t-stamlo-apollo", "t-stamlo-pe", "t-amlopres-kog"])),
     ]
 
 

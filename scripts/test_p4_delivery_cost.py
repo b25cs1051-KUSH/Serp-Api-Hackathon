@@ -54,10 +54,15 @@ def run_checks() -> bool:
         check("Chemist180 ₹100 below ₹1,000", q("Chemist180", 999, "110001")["delivery_fee"], 100.0),
         check("Chemist180 free from ₹1,000", q("Chemist180", 1000, "781001")["delivery_label"], "FREE delivery (order ≥ ₹1,000)"),
         check("SastaSundar ₹29 below ₹149", q("SastaSundar", 100, "700001")["delivery_fee"], 29.0),
-        check("Medplus metro ₹0 fee", q("Medplus", 10, "110001")["delivery_label"], "FREE delivery on every order"),
+        check("Medplus metro fee unpublished", q("Medplus", 10, "110001")["delivery_status"], "unknown"),
+        check("PharmEasy ₹130 band + ₹13 platform fee", q("PharmEasy", 161.82, "250002")["total_landed_cost"], 304.82),
+        check("PharmEasy ₹10 band (MRP ₹870)", q("PharmEasy", 809.1, "250002")["delivery_fee"], 10.0),
+        check("PharmEasy free from MRP ₹1,000", q("PharmEasy", 970.92, "250002")["delivery_status"], "free"),
+        check("Apollo ₹80 cart = ₹173.22 to pay", q("Apollo", 80, "110001")["total_landed_cost"], 173.22),
+        check("Apollo ₹264 cart = ₹271.08 to pay", q("Apollo", 264, "110001")["total_landed_cost"], 271.08),
         check("Medplus tier3 pickup only", q("Medplus", 100, "250001")["delivery_status"], "pickup_only"),
         check("Andaman unserviceable", q("1mg", 500, "744101")["total_landed_cost"], None),
-        check("Kogland free delivery (Google)", q("Kogland", 100, "190001")["delivery_status"], "free"),
+        check("Kogland remote fee unpublished", q("Kogland", 100, "190001")["delivery_status"], "unknown"),
         check("Unknown store not guessed", q("RandomShop", 100, "110001")["delivery_fee"], None),
         check("Medivik tier2 typo fixed", q("Medivik", 100, "160001")["delivery_fee"], 45.0),
     ]
@@ -69,14 +74,14 @@ def run_checks() -> bool:
         results.append(check("Invalid PIN raises", "ValueError", "ValueError"))
 
     listings = [
-        {"platform": "PharmEasy", "price_inr": 90.0},   # 90 + 75 = 165
-        {"platform": "1mg", "price_inr": 120.0},        # 120 + 75 = 195
+        {"platform": "PharmEasy", "price_inr": 90.0},   # 90 + 130 + 13 = 233
+        {"platform": "1mg", "price_inr": 120.0},        # 120 + 50 = 170
         {"platform": "Medplus", "price_inr": 10.0},     # pickup only in tier3
         {"platform": "RandomShop", "price_inr": 5.0},   # unknown
     ]
     ranked = rank_by_landed_price(listings, "250001")
     results.append(check("Ranking order", [r["platform"] for r in ranked],
-                         ["PharmEasy", "1mg", "Medplus", "RandomShop"]))
+                         ["1mg", "PharmEasy", "Medplus", "RandomShop"]))
     results.append(check("Cheapest flag", [r["is_cheapest"] for r in ranked], [True, False, False, False]))
     return all(results)
 

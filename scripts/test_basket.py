@@ -113,7 +113,7 @@ def run():
 
     # 8. The branch-and-bound search equals brute force on random baskets.
     rng = random.Random(7)
-    platforms = ["1mg", "Chemist180", "Netmeds", "Apollo Pharmacy", "PharmEasy", "Truemeds", "Medplus"]
+    platforms = ["1mg", "Chemist180", "Netmeds", "Apollo Pharmacy", "PharmEasy", "Truemeds", "SastaSundar"]
     mismatches = 0
     for _ in range(200):
         lines = []

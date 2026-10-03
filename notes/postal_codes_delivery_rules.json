@@ -143,30 +143,118 @@
     },
     "pharmeasy": {
       "display_name": "PharmEasy",
-      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): free delivery on a ₹24 order; Google Shopping shows free delivery on all 189 cached listings. Not checked at checkout.",
+      "source": "User cart screenshots, PIN 250002 Meerut (Oct 2026): MRP ₹174 → ₹130, ₹348 → ₹109, ₹522 → ₹49, ₹870 → ₹10, ₹1,044 → free ('Free delivery above ₹1000 MRP'); ₹13 platform fee on every order. PharmEasy's bands are in MRP; here they are in selling price at the carts' MRP discount (selling = 0.93 × MRP: 348→323, 522→485, 870→809, 1000→930). Applied to every zone (only one PIN seen).",
       "serviceable": true,
-      "fee_type": "flat_order_value",
-      "platform_fee": 0.0,
+      "fee_type": "tiered_order_value",
+      "platform_fee": 13,
       "zones": {
         "metro": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
-          "estimated_days": "1-2 Days"
+          "delivery_fee": 130,
+          "free_delivery_threshold": 930,
+          "estimated_days": "1-2 Days",
+          "order_value_slabs": [
+            {
+              "min_order": 0,
+              "fee": 130
+            },
+            {
+              "min_order": 323,
+              "fee": 109
+            },
+            {
+              "min_order": 485,
+              "fee": 49
+            },
+            {
+              "min_order": 809,
+              "fee": 10
+            },
+            {
+              "min_order": 930,
+              "fee": 0
+            }
+          ]
         },
         "tier2": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
-          "estimated_days": "1-2 Days"
+          "delivery_fee": 130,
+          "free_delivery_threshold": 930,
+          "estimated_days": "1-2 Days",
+          "order_value_slabs": [
+            {
+              "min_order": 0,
+              "fee": 130
+            },
+            {
+              "min_order": 323,
+              "fee": 109
+            },
+            {
+              "min_order": 485,
+              "fee": 49
+            },
+            {
+              "min_order": 809,
+              "fee": 10
+            },
+            {
+              "min_order": 930,
+              "fee": 0
+            }
+          ]
         },
         "tier3": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
-          "estimated_days": "4-6 Days"
+          "delivery_fee": 130,
+          "free_delivery_threshold": 930,
+          "estimated_days": "4-6 Days",
+          "order_value_slabs": [
+            {
+              "min_order": 0,
+              "fee": 130
+            },
+            {
+              "min_order": 323,
+              "fee": 109
+            },
+            {
+              "min_order": 485,
+              "fee": 49
+            },
+            {
+              "min_order": 809,
+              "fee": 10
+            },
+            {
+              "min_order": 930,
+              "fee": 0
+            }
+          ]
         },
         "remote": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
-          "estimated_days": "4-6 Days"
+          "delivery_fee": 130,
+          "free_delivery_threshold": 930,
+          "estimated_days": "4-6 Days",
+          "order_value_slabs": [
+            {
+              "min_order": 0,
+              "fee": 130
+            },
+            {
+              "min_order": 323,
+              "fee": 109
+            },
+            {
+              "min_order": 485,
+              "fee": 49
+            },
+            {
+              "min_order": 809,
+              "fee": 10
+            },
+            {
+              "min_order": 930,
+              "fee": 0
+            }
+          ]
         },
         "unserviceable": {
           "delivery_fee": null,
@@ -177,30 +265,70 @@
     },
     "apollo_247": {
       "display_name": "Apollo 24|7",
-      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): free next-day delivery on a ₹32 order. Not checked at checkout.",
+      "source": "User cart screenshots, PIN 110001 Delhi (Oct 2026): carts ₹80 and ₹176 → ₹79 delivery + ₹14.22 GST on fees (packaging and platform fees waived) = ₹93.22; cart ₹264 → delivery free but ₹6 platform fee + ₹1.08 GST = ₹7.08. The switch lies between ₹176 and ₹264; ₹199 is Apollo's advertised free-delivery threshold. Applied to every zone (only one PIN seen).",
       "serviceable": true,
-      "fee_type": "flat_order_value",
-      "platform_fee": 0.0,
+      "fee_type": "tiered_order_value",
+      "platform_fee": 0,
       "zones": {
         "metro": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
-          "estimated_days": "10-30 Mins / 1 Day"
+          "delivery_fee": 93.22,
+          "free_delivery_threshold": null,
+          "estimated_days": "10-30 Mins / 1 Day",
+          "order_value_slabs": [
+            {
+              "min_order": 0,
+              "fee": 93.22
+            },
+            {
+              "min_order": 199,
+              "fee": 7.08
+            }
+          ]
         },
         "tier2": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
-          "estimated_days": "1-2 Days"
+          "delivery_fee": 93.22,
+          "free_delivery_threshold": null,
+          "estimated_days": "1-2 Days",
+          "order_value_slabs": [
+            {
+              "min_order": 0,
+              "fee": 93.22
+            },
+            {
+              "min_order": 199,
+              "fee": 7.08
+            }
+          ]
         },
         "tier3": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
-          "estimated_days": "3-5 Days"
+          "delivery_fee": 93.22,
+          "free_delivery_threshold": null,
+          "estimated_days": "3-5 Days",
+          "order_value_slabs": [
+            {
+              "min_order": 0,
+              "fee": 93.22
+            },
+            {
+              "min_order": 199,
+              "fee": 7.08
+            }
+          ]
         },
         "remote": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
-          "estimated_days": "4-6 Days"
+          "delivery_fee": 93.22,
+          "free_delivery_threshold": null,
+          "estimated_days": "4-6 Days",
+          "order_value_slabs": [
+            {
+              "min_order": 0,
+              "fee": 93.22
+            },
+            {
+              "min_order": 199,
+              "fee": 7.08
+            }
+          ]
         },
         "unserviceable": {
           "delivery_fee": null,
@@ -335,19 +463,19 @@
     },
     "medplus_mart": {
       "display_name": "MedPlus Mart",
-      "source": "Google: 'Delivery by Mon on orders ₹250+' (Gurugram), no fee shown. Fees unverified.",
+      "source": "Fee unpublished. Google: 'Delivery by Mon on orders ₹250+' (Gurugram). The old 'free on every order' had no source and was removed; listings show 'fee not published' until a cart is checked.",
       "serviceable": true,
       "fee_type": "store_pickup_or_delivery",
       "platform_fee": 0.0,
       "zones": {
         "metro": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 50,
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
           "estimated_days": "Same Day / Store Pickup"
         },
         "tier2": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 200,
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
           "estimated_days": "Same Day / Store Pickup"
         },
         "tier3": {
@@ -603,29 +731,29 @@
     },
     "kogland_commerce": {
       "display_name": "Kogland Commerce",
-      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): free delivery on a ₹25 order.",
+      "source": "Unverified (pre-Oct 2026 values). Google shows free delivery, but Google's 'free' was wrong for PharmEasy and Apollo.",
       "serviceable": true,
-      "fee_type": "flat_order_value",
+      "fee_type": "volumetric_weight_b2b",
       "platform_fee": 0,
       "zones": {
         "metro": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
+          "delivery_fee": 50,
+          "free_delivery_threshold": 488,
           "estimated_days": "2-4 Days"
         },
         "tier2": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
+          "delivery_fee": 100,
+          "free_delivery_threshold": 488,
           "estimated_days": "4-6 Days"
         },
         "tier3": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
+          "delivery_fee": 100,
+          "free_delivery_threshold": 488,
           "estimated_days": "6-8 Days"
         },
         "remote": {
-          "delivery_fee": 0,
-          "free_delivery_threshold": 0,
+          "delivery_fee": null,
+          "free_delivery_threshold": null,
           "estimated_days": "8-14 Days"
         },
         "unserviceable": {
