@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, ArrowDown, ExternalLink, Stethoscope } from "lucide-react";
-import { inr, type AltResult, type Listing } from "@/lib/api";
+import { buyLink, inr, type AltResult, type Listing } from "@/lib/api";
 
 /** Shop view: the answer to "where do I buy it, and is there a cheaper brand?", above the full list. */
 export default function AnswerCard({
@@ -41,7 +41,7 @@ export default function AnswerCard({
   }
 
   const best = listings.find((l) => l.is_cheapest) ?? listings[0];
-  const href = best.direct_link || best.search_link || best.google_link;
+  const href = buyLink(best);
   const lowestShelf = listings.reduce((a, b) => (b.price_inr < a.price_inr ? b : a));
   const shelfFees = lowestShelf.total_landed_cost != null ? lowestShelf.total_landed_cost - lowestShelf.price_inr : null;
   const showShelfWarning =

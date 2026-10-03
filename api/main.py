@@ -17,6 +17,8 @@ This module only exposes them over HTTP and makes the cache observable:
                            queries, cosine scores, dosage guard. 0 credits, read-only
   GET /api/cache/entries   what is in Redis right now, with TTLs
   GET /api/stats           cache counters + totals for this API process
+  GET /api/link/{id}       redirect to a listing's own product page, resolved on first click
+                           (1 credit, then cached 24 h); falls back to the store search link
 
 Guards (each search can spend up to 12 SerpApi credits):
   - PIN and query are validated before anything runs — a bad request costs nothing
@@ -39,6 +41,7 @@ for _stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
+import hashlib
 import json
 import logging
 import os
@@ -47,16 +50,17 @@ import re
 import threading
 import time
 import urllib.request
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from typing import Iterator, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 
 from pharmawatch.delivery_cost import normalize_pincode
-from pharmawatch.pipeline import search_medicine_stream
+from pharmawatch.pipeline import _fetch_direct_link, search_medicine_stream
 from pharmawatch.prescription import MAX_LINES, prescription_stream
 from pharmawatch.search import SHOPPING_PARAMS, _get_cache, warm_up
 from serpapi_cache.backends import RedisBackend
@@ -94,6 +98,11 @@ _slots = threading.BoundedSemaphore(MAX_CONCURRENT_SEARCHES)
 _running_lock = threading.Lock()
 _running = {"pipelines": 0}
 _readers: dict[int, float] = {}   # id(stream) → its t0 (perf_counter)
+
+# link_id → (page token, platform, fallback search link) for product pages resolved on click.
+MAX_LINKS = 20000
+_links: "OrderedDict[str, tuple]" = OrderedDict()
+_links_lock = threading.Lock()
 
 _state = {"warm": "pending", "warm_ms": None, "warm_error": None}
 _session_lock = threading.Lock()
@@ -155,10 +164,37 @@ def _entry_kind(query_text: str) -> str:
     return "shopping"
 
 
+def _register_link(row: dict) -> Optional[str]:
+    """
+    Short id for a listing whose product page wasn't resolved during the search. The browser gets
+    the id instead of the (long) page token; /api/link/{id} resolves the page when it is clicked.
+    """
+    token = row.get("page_token")
+    if not token or row.get("direct_link"):
+        return None
+    link_id = hashlib.sha1(f"{token}|{row.get('platform')}".encode()).hexdigest()[:16]
+    with _links_lock:
+        _links[link_id] = (token, row.get("platform"), row.get("search_link") or row.get("google_link") or "")
+        _links.move_to_end(link_id)
+        while len(_links) > MAX_LINKS:
+            _links.popitem(last=False)
+    return link_id
+
+
+def _clean_row(row):
+    """A listing without internal fields the browser doesn't need (page tokens are long)."""
+    if not row:
+        return row
+    out = {k: v for k, v in row.items() if k != "page_token"}
+    link_id = _register_link(row)
+    if link_id:
+        out["link_id"] = link_id
+    return out
+
+
 def _clean_rows(rows):
-    """Listings without internal fields the browser doesn't need (page tokens are long)."""
     if isinstance(rows, list):
-        return [{k: v for k, v in r.items() if k != "page_token"} for r in rows]
+        return [_clean_row(r) for r in rows]
     return rows
 
 
@@ -184,9 +220,7 @@ def _clean_line(payload: dict) -> dict:
 
 def _clean_basket(result: dict) -> dict:
     """The basket without page tokens (long, internal)."""
-    def offer(o):
-        return {k: v for k, v in o.items() if k != "page_token"} if o else o
-
+    offer = _clean_row
     out = json.loads(json.dumps(result, default=str))
     for mode in ("with_swaps", "as_prescribed"):
         for plan in (out[mode]["best"], out[mode]["single_store"]):
@@ -505,6 +539,27 @@ def _search_events(handle: dict) -> Iterator[tuple[str, object]]:
         with _running_lock:
             _readers.pop(id(handle), None)
         _prune_call_log(cache)
+
+
+@app.get("/api/link/{link_id}")
+def open_link(link_id: str):
+    """
+    The listing's own pharmacy product page (google_immersive_product: 1 credit on the first click,
+    cached 24 h). If the page can't be resolved, the store search link the row showed before.
+    """
+    with _links_lock:
+        entry = _links.get(link_id)
+    if entry is None:
+        raise HTTPException(404, "This link has expired. Run the search again.")
+    token, platform, fallback = entry
+    try:
+        url = _fetch_direct_link({"page_token": token, "platform": platform})
+    except Exception as e:
+        log.warning("link %s (%s) failed: %s", link_id, platform, redact(f"{type(e).__name__}: {e}"))
+        url = ""
+    if not url and not fallback:
+        raise HTTPException(404, f"No product page found at {platform}.")
+    return RedirectResponse(url or fallback, status_code=302)
 
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}

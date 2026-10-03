@@ -1,7 +1,7 @@
 "use client";
 
 import { BadgeCheck, ExternalLink, FlaskConical, Pill as PillIcon, ShieldCheck, Store } from "lucide-react";
-import { inr, type Alternative, type AltResult } from "@/lib/api";
+import { buyLink, inr, isProductLink, type Alternative, type AltResult } from "@/lib/api";
 
 export default function Alternatives({ result, running }: { result: AltResult | null | undefined; running: boolean }) {
   if (result === undefined) {
@@ -90,7 +90,7 @@ export default function Alternatives({ result, running }: { result: AltResult | 
 }
 
 function AltRow({ alt, cheaper = false }: { alt: Alternative; cheaper?: boolean }) {
-  const href = alt.direct_link || alt.search_link || alt.google_link;
+  const href = buyLink(alt);
   return (
     <div className={`rise flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2.5 ${cheaper ? "border-hit/30 bg-hit/[0.05]" : "border-line bg-panel-2"}`}>
       <div className="min-w-0 flex-1">
@@ -130,7 +130,7 @@ function AltRow({ alt, cheaper = false }: { alt: Alternative; cheaper?: boolean 
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted ring-1 ring-line hover:text-ink"
       >
-        {alt.direct_link ? "Visit site" : "Search"} <ExternalLink className="h-3 w-3" />
+        {isProductLink(alt) ? "Visit site" : "Search"} <ExternalLink className="h-3 w-3" />
       </a>
     </div>
   );

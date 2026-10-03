@@ -123,6 +123,27 @@ def run_checks() -> bool:
             check("json: alternatives", j["alternatives"]["cheaper_alternatives"][0]["medicine_name"], "Amlokind 5MG Tablet"),
             check("json: stages", [s["name"] for s in j["stages"]], ["main", "alternatives", "main_links"]),
             check("json: calls + summary", (len(j["calls"]), j["summary"]["credits_spent"], j["error"]), (3, 1, None)),
+            check("json: unresolved row gets a link_id", bool(j["alternatives"]["cheaper_alternatives"][0].get("link_id")), True),
+            check("json: resolved row needs no link_id", "link_id" in j["listings"][0], False),
+        ]
+
+        # ── /api/link: product page resolved on click, store search as fallback ──
+        real_fetch = api._fetch_direct_link
+        link_id = j["alternatives"]["cheaper_alternatives"][0]["link_id"]
+        with_fallback = api._register_link(dict(listing("Amlokind 5MG Tablet", 19.41, "tok-9"), search_link="https://chemist180.com/s?q=amlokind"))
+        try:
+            api._fetch_direct_link = lambda row: f"https://chemist180.com/p/{row['page_token']}"
+            hit = client.get(f"/api/link/{link_id}", follow_redirects=False)
+            api._fetch_direct_link = lambda row: ""
+            miss = client.get(f"/api/link/{with_fallback}", follow_redirects=False)
+            nothing = client.get(f"/api/link/{link_id}", follow_redirects=False)
+        finally:
+            api._fetch_direct_link = real_fetch
+        results += [
+            check("link: redirects to the product page", (hit.status_code, hit.headers.get("location")), (302, "https://chemist180.com/p/tok-123")),
+            check("link: unresolved → store search", (miss.status_code, miss.headers.get("location")), (302, "https://chemist180.com/s?q=amlokind")),
+            check("link: unresolved, no fallback → 404", nothing.status_code, 404),
+            check("link: unknown id → 404", client.get("/api/link/0000000000000000", follow_redirects=False).status_code, 404),
         ]
 
         # ── a search that needs a strength: options, then done, nothing spent ──

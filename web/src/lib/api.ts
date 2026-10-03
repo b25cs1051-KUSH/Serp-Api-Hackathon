@@ -28,6 +28,7 @@ export interface Listing {
   direct_link?: string;
   search_link?: string;
   google_link?: string;
+  link_id?: string;
   is_cheapest?: boolean;
   rank?: number;
   thumbnail?: string;
@@ -179,6 +180,7 @@ export interface BasketOffer {
   direct_link?: string;
   search_link?: string;
   google_link?: string;
+  link_id?: string;
 }
 
 export interface BasketStore {
@@ -240,5 +242,9 @@ export interface RxLine {
   offers?: number;
 }
 
-export const buyLink = (o: { direct_link?: string; search_link?: string; google_link?: string }) =>
-  o.direct_link || o.search_link || o.google_link || undefined;
+/** The listing's product page: resolved during the search, or by the API on click (link_id). */
+export const buyLink = (o: { direct_link?: string; search_link?: string; google_link?: string; link_id?: string }) =>
+  o.direct_link || (o.link_id ? `${API_URL}/api/link/${o.link_id}` : o.search_link || o.google_link) || undefined;
+
+/** True when buyLink leads to the product page itself rather than a store search. */
+export const isProductLink = (o: { direct_link?: string; link_id?: string }) => Boolean(o.direct_link || o.link_id);

@@ -93,7 +93,7 @@ _PLATFORM_DOMAINS = {
     "pharmeasy": "pharmeasy.in",
     "netmeds": "netmeds.com",
     "apollo": "apollopharmacy.in",
-    "medplus": "medplusbazaar.com",
+    "medplus": "medplusmart.com",
 }
 
 
