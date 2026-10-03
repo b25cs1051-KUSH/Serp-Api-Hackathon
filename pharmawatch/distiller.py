@@ -59,13 +59,14 @@ def identify_platform(source: str, link: str) -> Optional[str]:
     """
     Identify if a result belongs to a target Indian pharma platform.
     Returns normalized platform name or None if not matched.
+    The seller name decides first; the link counts only by its domain. A Google Shopping link carries
+    our own query text ('... generic chemist180 price', 'Glimepiride 1mg'), which must never name the store.
     """
-    combined = f"{source} {link}".lower()
-    squashed = re.sub(r"[^a-z0-9]", "", combined)
-
-    for needle, name in PLATFORM_NAME_PATTERNS:
-        if needle in squashed:
-            return name
+    for text in (source, urllib.parse.urlsplit(link or "").netloc):
+        squashed = re.sub(r"[^a-z0-9]", "", (text or "").lower())
+        for needle, name in PLATFORM_NAME_PATTERNS:
+            if needle in squashed:
+                return name
 
     return None
 
