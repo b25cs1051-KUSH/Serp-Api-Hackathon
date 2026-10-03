@@ -4,8 +4,7 @@
     "description": "Zonal PIN code mapping and platform checkout price rule engine for Indian e-pharmacies.",
     "version": "2026.10",
     "currency": "INR",
-    "order_value_slabs": "Optional per zone: fee = the slab with the highest min_order <= order value; overrides delivery_fee.",
-    "fee_types": "estimated_fee: the store publishes its free-delivery threshold but not the fee below it; the fee is the median of published small-order fees (₹75) and is shown as an estimate."
+    "order_value_slabs": "Optional per zone: fee = the slab with the highest min_order <= order value; overrides delivery_fee."
   },
   "pin_zones": {
     "metro": {
@@ -110,28 +109,28 @@
   "platforms": {
     "tata_1mg": {
       "display_name": "Tata 1mg",
-      "source": "Free from ₹500: Google Shopping listing text (Oct 2026 cache). Fee below it unpublished: estimate.",
+      "source": "₹50 below ₹500: user checkout, Gurugram. Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees) shows ₹25 shipping and free from ₹500; the other ₹25 is presumably 1mg's handling fee.",
       "serviceable": true,
-      "fee_type": "estimated_fee",
+      "fee_type": "flat_order_value",
       "platform_fee": 0.0,
       "zones": {
         "metro": {
-          "delivery_fee": 75,
+          "delivery_fee": 50,
           "free_delivery_threshold": 500,
           "estimated_days": "1-2 Days"
         },
         "tier2": {
-          "delivery_fee": 75,
+          "delivery_fee": 50,
           "free_delivery_threshold": 500,
           "estimated_days": "2-3 Days"
         },
         "tier3": {
-          "delivery_fee": 75,
+          "delivery_fee": 50,
           "free_delivery_threshold": 500,
           "estimated_days": "2-3 Days"
         },
         "remote": {
-          "delivery_fee": 75,
+          "delivery_fee": 50,
           "free_delivery_threshold": 500,
           "estimated_days": "4-5 Days"
         },
@@ -144,29 +143,29 @@
     },
     "pharmeasy": {
       "display_name": "PharmEasy",
-      "source": "Free from ₹499: third-party coupon sites (sources range ₹199–₹999). Fee unpublished: estimate.",
+      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): free delivery on a ₹24 order; Google Shopping shows free delivery on all 189 cached listings. Not checked at checkout.",
       "serviceable": true,
-      "fee_type": "estimated_fee",
+      "fee_type": "flat_order_value",
       "platform_fee": 0.0,
       "zones": {
         "metro": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 499,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "1-2 Days"
         },
         "tier2": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 499,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "1-2 Days"
         },
         "tier3": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 499,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "4-6 Days"
         },
         "remote": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 499,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "4-6 Days"
         },
         "unserviceable": {
@@ -178,29 +177,29 @@
     },
     "apollo_247": {
       "display_name": "Apollo 24|7",
-      "source": "Free from ₹199: Apollo Circle page and coupon sites. Fee unpublished: estimate.",
+      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): free next-day delivery on a ₹32 order. Not checked at checkout.",
       "serviceable": true,
-      "fee_type": "estimated_fee",
+      "fee_type": "flat_order_value",
       "platform_fee": 0.0,
       "zones": {
         "metro": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 199,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "10-30 Mins / 1 Day"
         },
         "tier2": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 199,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "1-2 Days"
         },
         "tier3": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 199,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "3-5 Days"
         },
         "remote": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 199,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "4-6 Days"
         },
         "unserviceable": {
@@ -212,19 +211,19 @@
     },
     "netmeds": {
       "display_name": "Netmeds",
-      "source": "netmeds.com/shipping-policy (returning customers): ₹69 up to ₹250, ₹29 ₹250–499, free from ₹500.",
+      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): ₹59 on a ₹25 order, free from ₹500. ₹29 for ₹250–499 from netmeds.com/shipping-policy.",
       "serviceable": true,
       "fee_type": "tiered_order_value",
       "platform_fee": 0.0,
       "zones": {
         "metro": {
-          "delivery_fee": 69,
+          "delivery_fee": 59,
           "free_delivery_threshold": 500,
           "estimated_days": "1-2 Days",
           "order_value_slabs": [
             {
               "min_order": 0,
-              "fee": 69
+              "fee": 59
             },
             {
               "min_order": 250,
@@ -237,13 +236,13 @@
           ]
         },
         "tier2": {
-          "delivery_fee": 69,
+          "delivery_fee": 59,
           "free_delivery_threshold": 500,
           "estimated_days": "2-3 Days",
           "order_value_slabs": [
             {
               "min_order": 0,
-              "fee": 69
+              "fee": 59
             },
             {
               "min_order": 250,
@@ -256,13 +255,13 @@
           ]
         },
         "tier3": {
-          "delivery_fee": 69,
+          "delivery_fee": 59,
           "free_delivery_threshold": 500,
           "estimated_days": "3-5 Days",
           "order_value_slabs": [
             {
               "min_order": 0,
-              "fee": 69
+              "fee": 59
             },
             {
               "min_order": 250,
@@ -275,13 +274,13 @@
           ]
         },
         "remote": {
-          "delivery_fee": 69,
+          "delivery_fee": 59,
           "free_delivery_threshold": 500,
           "estimated_days": "5-7 Days",
           "order_value_slabs": [
             {
               "min_order": 0,
-              "fee": 69
+              "fee": 59
             },
             {
               "min_order": 250,
@@ -302,7 +301,7 @@
     },
     "truemeds": {
       "display_name": "Truemeds",
-      "source": "₹49 below ₹500: third-party coupon sites. platform_fee ₹11 unverified.",
+      "source": "Google shows no shipping fee. ₹49 below ₹500 from third-party coupon sites; ₹11 platform fee unverified.",
       "serviceable": true,
       "fee_type": "flat_order_value",
       "platform_fee": 11,
@@ -336,7 +335,7 @@
     },
     "medplus_mart": {
       "display_name": "MedPlus Mart",
-      "source": "Unverified: no published fees found (Oct 2026).",
+      "source": "Google: 'Delivery by Mon on orders ₹250+' (Gurugram), no fee shown. Fees unverified.",
       "serviceable": true,
       "fee_type": "store_pickup_or_delivery",
       "platform_fee": 0.0,
@@ -370,28 +369,28 @@
     },
     "dawaadost": {
       "display_name": "Dawaa Dost",
-      "source": "Free from ₹850: Google Shopping listing text (Oct 2026 cache) and dawaadost.com. Fee unpublished: estimate.",
+      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): ₹50 below ₹850, free from ₹850.",
       "serviceable": true,
-      "fee_type": "estimated_fee",
+      "fee_type": "flat_order_value",
       "platform_fee": 0,
       "zones": {
         "metro": {
-          "delivery_fee": 75,
+          "delivery_fee": 50,
           "free_delivery_threshold": 850,
           "estimated_days": "1-2 Days"
         },
         "tier2": {
-          "delivery_fee": 75,
+          "delivery_fee": 50,
           "free_delivery_threshold": 850,
           "estimated_days": "2-4 Days"
         },
         "tier3": {
-          "delivery_fee": 75,
+          "delivery_fee": 50,
           "free_delivery_threshold": 850,
           "estimated_days": "3-4 Days"
         },
         "remote": {
-          "delivery_fee": 75,
+          "delivery_fee": 50,
           "free_delivery_threshold": 850,
           "estimated_days": "4-5 Days"
         },
@@ -468,70 +467,30 @@
     },
     "chemist180": {
       "display_name": "Chemist180",
-      "source": "Checkout (user, Oct 2026): orders below ₹500 ship by courier for ₹100. Google Shopping shows free from ₹1,000; if ₹500–999 is charged, move the free slab to 1000.",
+      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): ₹100 below ₹1,000, free from ₹1,000 (both cities). User checkout: ₹100 courier on small orders.",
       "serviceable": true,
-      "fee_type": "tiered_order_value",
+      "fee_type": "flat_order_value",
       "platform_fee": 0,
       "zones": {
         "metro": {
           "delivery_fee": 100,
-          "free_delivery_threshold": 500,
-          "estimated_days": "2-4 Days",
-          "order_value_slabs": [
-            {
-              "min_order": 0,
-              "fee": 100
-            },
-            {
-              "min_order": 500,
-              "fee": 0
-            }
-          ]
+          "free_delivery_threshold": 1000,
+          "estimated_days": "2-4 Days"
         },
         "tier2": {
           "delivery_fee": 100,
-          "free_delivery_threshold": 500,
-          "estimated_days": "3-5 Days",
-          "order_value_slabs": [
-            {
-              "min_order": 0,
-              "fee": 100
-            },
-            {
-              "min_order": 500,
-              "fee": 0
-            }
-          ]
+          "free_delivery_threshold": 1000,
+          "estimated_days": "3-5 Days"
         },
         "tier3": {
           "delivery_fee": 100,
-          "free_delivery_threshold": 500,
-          "estimated_days": "5-7 Days",
-          "order_value_slabs": [
-            {
-              "min_order": 0,
-              "fee": 100
-            },
-            {
-              "min_order": 500,
-              "fee": 0
-            }
-          ]
+          "free_delivery_threshold": 1000,
+          "estimated_days": "5-7 Days"
         },
         "remote": {
           "delivery_fee": 100,
-          "free_delivery_threshold": 500,
-          "estimated_days": "7-10 Days",
-          "order_value_slabs": [
-            {
-              "min_order": 0,
-              "fee": 100
-            },
-            {
-              "min_order": 500,
-              "fee": 0
-            }
-          ]
+          "free_delivery_threshold": 1000,
+          "estimated_days": "7-10 Days"
         },
         "unserviceable": {
           "delivery_fee": null,
@@ -576,7 +535,7 @@
     },
     "medivik": {
       "display_name": "Medivik",
-      "source": "Unverified: no published fees found (Oct 2026).",
+      "source": "Google shows no shipping fee. Fees unverified.",
       "serviceable": true,
       "fee_type": "flat_order_value",
       "platform_fee": 0,
@@ -644,29 +603,29 @@
     },
     "kogland_commerce": {
       "display_name": "Kogland Commerce",
-      "source": "Unverified: no published fees found (Oct 2026).",
+      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): free delivery on a ₹25 order.",
       "serviceable": true,
-      "fee_type": "volumetric_weight_b2b",
+      "fee_type": "flat_order_value",
       "platform_fee": 0,
       "zones": {
         "metro": {
-          "delivery_fee": 50,
-          "free_delivery_threshold": 488,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "2-4 Days"
         },
         "tier2": {
-          "delivery_fee": 100,
-          "free_delivery_threshold": 488,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "4-6 Days"
         },
         "tier3": {
-          "delivery_fee": 100,
-          "free_delivery_threshold": 488,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "6-8 Days"
         },
         "remote": {
-          "delivery_fee": null,
-          "free_delivery_threshold": null,
+          "delivery_fee": 0,
+          "free_delivery_threshold": 0,
           "estimated_days": "8-14 Days"
         },
         "unserviceable": {
@@ -678,29 +637,29 @@
     },
     "sastasundar": {
       "display_name": "SastaSundar",
-      "source": "sastasundar.com FAQ: ₹75 below ₹750 outside WB/Delhi NCR (₹50 below ₹250 inside); the higher rule is used everywhere.",
+      "source": "Google product page shipping (SerpApi google_immersive_product, 3 Oct 2026; Gurugram and Guwahati gave identical fees): ₹29 below ₹149, free from ₹149.",
       "serviceable": true,
       "fee_type": "flat_order_value",
       "platform_fee": 0,
       "zones": {
         "metro": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 750,
+          "delivery_fee": 29,
+          "free_delivery_threshold": 149,
           "estimated_days": "3 Days"
         },
         "tier2": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 750,
+          "delivery_fee": 29,
+          "free_delivery_threshold": 149,
           "estimated_days": "7-10 Days"
         },
         "tier3": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 750,
+          "delivery_fee": 29,
+          "free_delivery_threshold": 149,
           "estimated_days": "7-10 Days"
         },
         "remote": {
-          "delivery_fee": 75,
-          "free_delivery_threshold": 750,
+          "delivery_fee": 29,
+          "free_delivery_threshold": 149,
           "estimated_days": "7-10 Days"
         },
         "unserviceable": {

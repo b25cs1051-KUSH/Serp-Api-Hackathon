@@ -1,8 +1,8 @@
 """
 test_basket.py — Offline checks for pharmawatch/basket.py (0 SerpApi credits).
 
-Delivery rules are the real ones for PIN 110001: 1mg free from ₹500 (else ~₹75), Chemist180 free
-from ₹500 (else ₹100), Netmeds free from ₹500 (else ₹29–69), Apollo free from ₹199 (else ~₹75).
+Delivery rules are the real ones for PIN 110001: 1mg free from ₹500 (else ₹50), Chemist180 free
+from ₹1,000 (else ₹100), Netmeds free from ₹500 (else ₹29–59), DawaaDost free from ₹850 (else ₹50).
 
     python scripts/test_basket.py
 """
@@ -60,22 +60,22 @@ def brute_force(lines):
 
 def run():
     # 1. Free-delivery threshold: both at 1mg (₹500, free from ₹500) beats the per-item cheapest
-    #    (both at Chemist180 ₹420 + ₹100 delivery = ₹520).
-    r = basket.optimise([line("A", offer("Chemist180", 200), offer("1mg", 250)),
-                         line("B", offer("Chemist180", 220), offer("1mg", 250))], PIN)
+    #    (both at Truemeds ₹470 + ₹49 delivery + ₹11 platform fee = ₹530).
+    r = basket.optimise([line("A", offer("Truemeds", 235), offer("1mg", 250)),
+                         line("B", offer("Truemeds", 235), offer("1mg", 250))], PIN)
     best = r["with_swaps"]["best"]
     check("threshold: one 1mg order beats the split", (best["total"], stores(best)), (500.0, [("1mg", [0, 1])]))
     check("threshold: per-line cheapest alone is still reported",
           (r["per_line"][0]["cheapest_any"]["platform"], r["per_line"][1]["cheapest_any"]["platform"]),
-          ("Chemist180", "Chemist180"))
+          ("Truemeds", "Truemeds"))
     check("single store = the same 1mg order here", r["with_swaps"]["single_store"]["total"], 500.0)
 
     # 2. Small order, no threshold reached: the lower fee beats cheaper items.
-    r = basket.optimise([line("A", offer("Netmeds", 20), offer("Apollo Pharmacy", 18)),
-                         line("B", offer("Netmeds", 30), offer("Apollo Pharmacy", 28))], PIN)
-    check("small order: Netmeds (₹50 + ₹69) beats Apollo (₹46 + ~₹75)",
-          (r["with_swaps"]["best"]["total"], stores(r["with_swaps"]["best"])), (119.0, [("Netmeds", [0, 1])]))
-    check("fees reported", (r["with_swaps"]["best"]["fees_total"], r["with_swaps"]["best"]["items_total"]), (69.0, 50.0))
+    r = basket.optimise([line("A", offer("Netmeds", 18), offer("Dawaa Dost", 20)),
+                         line("B", offer("Netmeds", 28), offer("Dawaa Dost", 30))], PIN)
+    check("small order: DawaaDost (₹50 + ₹50) beats Netmeds (₹46 + ₹59)",
+          (r["with_swaps"]["best"]["total"], stores(r["with_swaps"]["best"])), (100.0, [("Dawaa Dost", [0, 1])]))
+    check("fees reported", (r["with_swaps"]["best"]["fees_total"], r["with_swaps"]["best"]["items_total"]), (50.0, 50.0))
 
     # 3. Swapping to a same-composition generic saves money; as-prescribed keeps the brand.
     r = basket.optimise([line("Dolo 650", offer("Chemist180", 26.32), offer("Chemist180", 13.94, "Paracip 650", False))], PIN)

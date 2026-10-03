@@ -342,19 +342,20 @@ def check_stamlo_pipeline() -> list:
         check("Event order", [k for k, _ in events], ["main", "main_update", "alternatives", "main_links"]),
         check("Main: look-alikes dropped", titles(got["main"]), ["Stamlo-5 Tablet 30's", "Stamlo 5MG Tablet"]),
         check("Main update: Stamlo from Amlokind search added", "Stamlo 5Mg Strip Of 30 Tablets" in titles(got["main_update"]), True),
-        # Single strips: delivery (₹75–100) decides, so PharmEasy's 30-strip is the reference.
+        # Single strips: delivery fees decide, so PharmEasy's free-delivery 30-strip is the reference.
         check("Reference = PharmEasy 30-strip (Amlokind search)",
               (alt["reference"]["platform"], alt["reference"]["pack_size"], alt["reference"]["pack_estimated"]),
               ("PharmEasy", 30, False)),
-        check("Cheaper: Amlopres @ Kogland, found via pooling (Amtas search)",
-              (cheaper.get("brand"), cheaper.get("platform")), ("Amlopres 5", "Kogland Commerce")),
-        check("Cheaper alt has its direct link", cheaper.get("direct_link"), "https://Kogland%20Commerce/t-amlopres-kog"),
-        check("Not-cheaper alt: direct_link empty", by_brand.get("Amlokind 5", {}).get("direct_link"), ""),
+        check("Cheaper: Amlokind @ Apollo (free delivery)",
+              (cheaper.get("brand"), cheaper.get("platform")), ("Amlokind 5", "Apollo Pharmacy")),
+        check("Cheaper alt has its direct link", cheaper.get("direct_link"), "https://Apollo%20Pharmacy/t-amlokind-apollo"),
+        check("Amlopres found via pooling (Amtas search)", by_brand.get("Amlopres 5", {}).get("platform"), "Kogland Commerce"),
+        check("Not-cheaper alt: direct_link empty", by_brand.get("Amlopres 5", {}).get("direct_link"), ""),
         check("Amtas genuinely not found", alt["not_found"], ["Amtas 5"]),
         check("Main links on all top rows", all(main_links.values()), True),
         check("No link spent on look-alikes", sorted(t for t in requested if t in ("t-esta", "t-bis", "t-at")), []),
         check("Link lookups made", link_calls,
-              sorted(["t-stamlo-c180", "t-stamlo-apollo", "t-stamlo-pe", "t-amlopres-kog"])),
+              sorted(["t-stamlo-c180", "t-stamlo-apollo", "t-stamlo-pe", "t-amlokind-apollo"])),
     ]
 
 

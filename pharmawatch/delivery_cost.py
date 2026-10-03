@@ -31,9 +31,7 @@ RULES_JSON_PATH = os.path.join(
 ZONE_PRIORITY = ["unserviceable", "metro", "tier2", "remote", "tier3"]
 
 # Fees for these fee_types depend on parcel weight, so the published fee is an estimate.
-WEIGHT_FEE_TYPES = {"weight_and_value_based", "volumetric_weight_b2b"}
-# estimated_fee: the store publishes its free-delivery threshold but not the fee below it.
-ESTIMATED_FEE_TYPES = WEIGHT_FEE_TYPES | {"estimated_fee"}
+ESTIMATED_FEE_TYPES = {"weight_and_value_based", "volumetric_weight_b2b"}
 
 # Substring (lowercase, alphanumerics only) of a distiller platform name → rules key.
 PLATFORM_ALIASES: List[Tuple[str, str]] = [
@@ -148,7 +146,7 @@ def calculate_delivery_cost(
         serviceable            : bool — home delivery to this PIN is available
         free_delivery_threshold: float or None
         amount_to_free_delivery: extra order value needed for free delivery, or None
-        fee_is_estimate        : True for weight-based and unpublished (estimated) fees
+        fee_is_estimate        : True for weight-based fees
         estimated_days         : str
         delivery_label         : one-line text for the UI, always present
     """
@@ -251,7 +249,7 @@ def calculate_delivery_cost(
         if condition:
             label += f" ({condition})"
         if quote["fee_is_estimate"]:
-            label += " (weight-based estimate)" if platform.get("fee_type") in WEIGHT_FEE_TYPES else " (estimated fee)"
+            label += " (weight-based estimate)"
         if threshold is not None and threshold > order_value:
             gap = round(threshold - order_value, 2)
             quote["amount_to_free_delivery"] = gap
