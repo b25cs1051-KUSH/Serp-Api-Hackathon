@@ -2,6 +2,13 @@ import { ArrowRight, Check, Minus } from "lucide-react";
 import Link from "next/link";
 import { GITHUB_URL } from "@/components/shell/SiteHeader";
 import { API_DOCS_URL, BENCHMARK, CAPABILITIES, HERO, MCP_CONFIG, STEPS } from "./content";
+import { DEMO } from "./demo";
+
+/** /engine with the recorded prescription preloaded: it runs from the cache, with product links off. */
+export const ENGINE_DEMO_HREF = `/engine?${new URLSearchParams({
+  rx: DEMO.items.map((it) => (it.tablets ? `${it.q} x${it.tablets}` : it.q)).join(";"),
+  pin: DEMO.pincode,
+})}`;
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-hit">{children}</div>;
@@ -33,7 +40,7 @@ export function Hero({ aside }: { aside?: React.ReactNode }) {
             Try a prescription <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            href="/engine"
+            href={ENGINE_DEMO_HREF}
             className="inline-flex items-center rounded-lg border border-line bg-panel px-5 py-3 text-sm font-medium text-ink hover:border-accent/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             See under the hood

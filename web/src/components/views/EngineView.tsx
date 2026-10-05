@@ -1,14 +1,14 @@
 "use client";
 
 import { Coins, Link2, Repeat } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Alternatives from "@/components/Alternatives";
 import BasketCard from "@/components/BasketCard";
 import CacheExplorer from "@/components/CacheExplorer";
 import CacheFlow from "@/components/CacheFlow";
 import CacheLab from "@/components/CacheLab";
 import ChooseCard from "@/components/ChooseCard";
-import PrescriptionForm, { RX_EXAMPLE } from "@/components/PrescriptionForm";
+import PrescriptionForm, { RX_EXAMPLE, parseLine } from "@/components/PrescriptionForm";
 import Results from "@/components/Results";
 import SearchBox, { ModeToggle, type Mode } from "@/components/shell/SearchBox";
 import SiteFooter from "@/components/shell/SiteFooter";
@@ -49,11 +49,40 @@ export default function EngineView() {
     if (!clean.length || rxRunning) return;
     rx.run(clean, pincode, links);
   };
+  const runRx = (items: RxItem[], pin: string) => rx.run(items, pin, false);
   const pickRx = (line: number, q: string) => {
     const items = rx.state.items.map((it, i) => (i === line ? { ...it, q } : it));
     setRxItems(items);
     rx.run(items, rx.state.pincode, links);
   };
+
+  // Deep links: /engine?q=Dolo%20650&pin=110001 runs one medicine, /engine?rx=<lines, one per medicine>&pin=… a
+  // prescription. Read once on load; started with product links off, so opening a link never pays for product pages.
+  // The timer is cleared on unmount, so React's development double-mount starts the run once.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pin = /^[1-9]\d{5}$/.test(params.get("pin") ?? "") ? params.get("pin")! : "110001";
+    const q = params.get("q")?.trim();
+    const rx = (params.get("rx") ?? "")
+      .split(/\r?\n|;/)
+      .map(parseLine)
+      .filter((x): x is RxItem => x !== null)
+      .slice(0, 8);
+    if (!q && !rx.length) return;
+    const t = setTimeout(() => {
+      setPincode(pin);
+      setLinks(false);
+      if (rx.length) {
+        setMode("rx");
+        setRxItems(rx);
+        runRx(rx, pin);
+      } else if (q) {
+        setQuery(q);
+        run(q, pin, false);
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const s = stats?.session;
 
@@ -63,12 +92,12 @@ export default function EngineView() {
       <StatusPills health={health} healthErr={healthErr} account={account} />
 
       <section className="pt-8 pb-8">
-        <h1 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-          The real price of your medicine, <span className="bg-gradient-to-r from-hit to-sem bg-clip-text text-transparent">delivered to your PIN</span>.
-        </h1>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-hit">Under the hood</div>
+        <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">Every SerpApi call, cache decision and credit, live.</h1>
         <p className="mt-3 max-w-2xl text-sm text-muted">
-          Compares 1mg, PharmEasy, Netmeds, Apollo and Medplus including delivery fees, suggests only verified same-composition generics, and never pays
-          SerpApi twice for the same question.
+          Run a medicine or a whole prescription and watch each lookup: an exact Redis hit, a semantic hit with its similarity score, or a
+          SerpApi call that costs one credit. Run it again and it costs nothing. Below: how the cache decides, a lab to test it for free, and
+          what is in Redis right now.
         </p>
 
         <ModeToggle mode={mode} onChange={setMode} />
@@ -160,6 +189,29 @@ export default function EngineView() {
 
       <section className="mt-16">
         <SectionTitle
+          eyebrow="The cache"
+          title="How a query decides whether to spend a credit"
+          sub="Every SerpApi request goes through serpapi_cache: a drop-in replacement for serpapi.Client.search(). Similar questions reuse answers; different doses never do."
+        />
+        <CacheFlow threshold={health?.similarity_threshold} />
+      </section>
+
+      <section className="mt-16">
+        <SectionTitle
+          eyebrow="Cache lab · 0 credits"
+          title="Ask the cache what it would do"
+          sub="Type any query. It runs the same decision on the live Redis contents and shows the nearest cached queries with their similarity scores. Nothing is sent to SerpApi."
+        />
+        <CacheLab />
+      </section>
+
+      <section className="mt-16">
+        <SectionTitle eyebrow="Redis" title="What is cached right now" sub="Raw SerpApi responses, product-page lookups and Gemini spelling decisions, each with its own TTL." />
+        <CacheExplorer data={entries} onRefresh={refresh} />
+      </section>
+
+      <section className="mt-16">
+        <SectionTitle
           eyebrow="Proof"
           title="What the cache has saved since this server started"
           sub="Every number is measured from real calls on this machine, not estimated from a formula."
@@ -188,29 +240,6 @@ export default function EngineView() {
             <span className="text-faint">live from account.json (costs nothing)</span>
           </div>
         )}
-      </section>
-
-      <section className="mt-16">
-        <SectionTitle
-          eyebrow="The cache"
-          title="How a query decides whether to spend a credit"
-          sub="Every SerpApi request goes through serpapi_cache: a drop-in replacement for serpapi.Client.search(). Similar questions reuse answers; different doses never do."
-        />
-        <CacheFlow threshold={health?.similarity_threshold} />
-      </section>
-
-      <section className="mt-16">
-        <SectionTitle
-          eyebrow="Cache lab · 0 credits"
-          title="Ask the cache what it would do"
-          sub="Type any query. It runs the same decision on the live Redis contents and shows the nearest cached queries with their similarity scores. Nothing is sent to SerpApi."
-        />
-        <CacheLab />
-      </section>
-
-      <section className="mt-16">
-        <SectionTitle eyebrow="Redis" title="What is cached right now" sub="Raw SerpApi responses, product-page lookups and Gemini spelling decisions, each with its own TTL." />
-        <CacheExplorer data={entries} onRefresh={refresh} />
       </section>
 
       <SiteFooter />
