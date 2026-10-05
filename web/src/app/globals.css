@@ -13,8 +13,21 @@
   --color-miss: #fbbf24;
   --color-bad: #fb7185;
   --color-llm: #c084fc;
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "Cascadia Code", monospace;
+  --font-sans: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, "Cascadia Code", monospace;
+
+  /* Light design system (landing page and shop; applied from U2). Semantic colours mean the same
+     everywhere: save = free or saving, warn = costs a credit or a fee, error = blocked or unavailable. */
+  --color-ground: #fbfbf9;
+  --color-text: #111418;
+  --color-subtle: #5f6670;
+  --color-rule: #e5e6e3;
+  --color-accent: #0d6e6e;
+  --color-save: #0b8a63;
+  --color-mint: #d9f2e7;
+  --color-warn: #b8640a;
+  --color-error: #c2413b;
+  --color-console: #0f1417;
 }
 
 :root {
