@@ -129,7 +129,10 @@ def build_offers(line: dict, pooled: List[dict], match: Optional[dict]) -> dict:
                         "prescribed": _is_prescribed(brand, match, line["query"]),
                         "medicine_name": r.get("medicine_name", ""),
                         "manufacturer": r.get("manufacturer"),
-                        "direct_link": r.get("direct_link") or "",
+                        # The distiller fills direct_link with the store search link as a placeholder;
+                        # only a resolved product page counts, so basket_links / link ids can resolve it.
+                        "direct_link": ("" if r.get("direct_link") in (r.get("search_link"), r.get("google_link"))
+                                        else r.get("direct_link") or ""),
                         "search_link": r.get("search_link") or "",
                         "google_link": r.get("google_link") or "",
                         "page_token": r.get("page_token") or "",
