@@ -4,8 +4,8 @@
 #   pharmawatch-web    Next.js standalone server
 # Keys are entered in the Render dashboard (sync: false); they are never in this file or an image.
 # Free web services sleep after 15 min idle; the first request after that takes about a minute.
-# Render named the API pharmawatch-api-zmwy (pharmawatch-api was taken). If a URL changes, update UI_ORIGINS and NEXT_PUBLIC_API_URL
-# (then redeploy pharmawatch-web: the API URL is fixed at build time).
+# The browser API URL is fixed at web build time. Cross-service references follow the
+# actual URLs Render assigns in each workspace, including a suffix after a name collision.
 
 services:
   - type: keyvalue
@@ -41,7 +41,7 @@ services:
       - key: MAX_CONCURRENT_SEARCHES  # free instances get a fraction of a CPU
         value: "3"
       - key: UI_ORIGINS
-        value: https://pharmawatch-web.onrender.com
+        fromService: { type: web, name: pharmawatch-web, envVarKey: RENDER_EXTERNAL_URL }
 
   - type: web
     name: pharmawatch-web
@@ -53,7 +53,7 @@ services:
     startCommand: node .next/standalone/server.js
     envVars:
       - key: NEXT_PUBLIC_API_URL      # read by the browser, fixed at build time
-        value: https://pharmawatch-api-zmwy.onrender.com
+        fromService: { type: web, name: pharmawatch-api, envVarKey: RENDER_EXTERNAL_URL }
       - key: HOSTNAME                 # listen on all interfaces, not the container's hostname
         value: 0.0.0.0
       - key: NODE_VERSION
