@@ -1,0 +1,711 @@
+{
+ "recorded_at": "2026-10-06",
+ "source": "GET /api/prescription on the local API (links off): every lookup served from the Redis cache",
+ "pincode": "110001",
+ "items": [
+  {
+   "q": "Dolo 650",
+   "tablets": 15
+  },
+  {
+   "q": "Stamlo 5 tablet",
+   "tablets": 30
+  },
+  {
+   "q": "Atorbest 10",
+   "tablets": 30
+  },
+  {
+   "q": "Telma 40",
+   "tablets": 30
+  }
+ ],
+ "calls": [
+  {
+   "n": 1,
+   "tag": "line 1 main: Dolo 650",
+   "engine": "google_shopping",
+   "query": "Dolo 650 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 1,
+   "ms": 1.0,
+   "credit": false
+  },
+  {
+   "n": 2,
+   "tag": "line 2 main: Stamlo 5 tablet",
+   "engine": "google_shopping",
+   "query": "Stamlo 5 tablet price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 9,
+   "ms": 1.1,
+   "credit": false
+  },
+  {
+   "n": 3,
+   "tag": "line 3 main: Atorbest 10",
+   "engine": "google_shopping",
+   "query": "Atorbest 10 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 14,
+   "ms": 0.9,
+   "credit": false
+  },
+  {
+   "n": 4,
+   "tag": "line 4 main: Telma 40",
+   "engine": "google_shopping",
+   "query": "Telma 40 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 23,
+   "ms": 0.9,
+   "credit": false
+  },
+  {
+   "n": 5,
+   "tag": "line 2: Amlodipine 5mg tablet generic chemist180",
+   "engine": "google_shopping",
+   "query": "Amlodipine 5mg tablet generic chemist180 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 36,
+   "ms": 2.4,
+   "credit": false
+  },
+  {
+   "n": 6,
+   "tag": "line 1: Paracetamol 650mg tablet generic",
+   "engine": "google_shopping",
+   "query": "Paracetamol 650mg tablet generic price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 36,
+   "ms": 7.3,
+   "credit": false
+  },
+  {
+   "n": 7,
+   "tag": "line 1: Paracetamol 650mg tablet generic chemist180",
+   "engine": "google_shopping",
+   "query": "Paracetamol 650mg tablet generic chemist180 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 35,
+   "ms": 8.9,
+   "credit": false
+  },
+  {
+   "n": 8,
+   "tag": "line 4: Cresar 40",
+   "engine": "google_shopping",
+   "query": "Cresar 40 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 36,
+   "ms": 10.9,
+   "credit": false
+  },
+  {
+   "n": 9,
+   "tag": "line 1: Paracip 650",
+   "engine": "google_shopping",
+   "query": "Paracip 650 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 37,
+   "ms": 12.2,
+   "credit": false
+  },
+  {
+   "n": 10,
+   "tag": "line 4: Telmisartan 40mg tablet generic chemist180",
+   "engine": "google_shopping",
+   "query": "Telmisartan 40mg tablet generic chemist180 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 37,
+   "ms": 13.4,
+   "credit": false
+  },
+  {
+   "n": 11,
+   "tag": "line 3: Atorvastatin 10mg tablet generic chemist180",
+   "engine": "google_shopping",
+   "query": "Atorvastatin 10mg tablet generic chemist180 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 41,
+   "ms": 17.8,
+   "credit": false
+  },
+  {
+   "n": 12,
+   "tag": "line 4: Telmisartan 40mg tablet generic",
+   "engine": "google_shopping",
+   "query": "Telmisartan 40mg tablet generic price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 36,
+   "ms": 24.7,
+   "credit": false
+  },
+  {
+   "n": 13,
+   "tag": "line 3: Atorlip 10",
+   "engine": "google_shopping",
+   "query": "Atorlip 10 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 46,
+   "ms": 24.1,
+   "credit": false
+  },
+  {
+   "n": 14,
+   "tag": "line 2: Amlodipine 5mg tablet generic",
+   "engine": "google_shopping",
+   "query": "Amlodipine 5mg tablet generic price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 38,
+   "ms": 35.0,
+   "credit": false
+  },
+  {
+   "n": 15,
+   "tag": "line 2: Amlopres 5",
+   "engine": "google_shopping",
+   "query": "Amlopres 5 price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 38,
+   "ms": 36.3,
+   "credit": false
+  },
+  {
+   "n": 16,
+   "tag": "line 3: Atorvastatin 10mg tablet generic",
+   "engine": "google_shopping",
+   "query": "Atorvastatin 10mg tablet generic price",
+   "kind": "exact",
+   "similarity": null,
+   "start_ms": 41,
+   "ms": 40.4,
+   "credit": false
+  }
+ ],
+ "summary": {
+  "total_ms": 108,
+  "calls": 16,
+  "credits_spent": 0,
+  "credits_saved": 16,
+  "exact_hits": 16,
+  "semantic_hits": 0,
+  "est_time_saved_ms": 24083,
+  "timings": {
+   "line_ms": 96,
+   "basket_ms": 108
+  }
+ },
+ "basket": {
+  "with_swaps": {
+   "best": {
+    "total": 264.87,
+    "items_total": 264.87,
+    "fees_total": 0.0,
+    "stores": [
+     {
+      "platform": "SastaSundar",
+      "lines": [
+       {
+        "brand": "Dolo 650",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 1,
+        "pack_size": 15,
+        "pack_estimated": true,
+        "price_inr": 26.34,
+        "item_cost": 26.34,
+        "per_tablet": 1.76,
+        "prescribed": true,
+        "medicine_name": "Dolo 650 mg",
+        "manufacturer": "Micro Labs Ltd",
+        "line": 0
+       },
+       {
+        "brand": "Amodep 5",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 2,
+        "pack_size": 15,
+        "pack_estimated": false,
+        "price_inr": 15.08,
+        "item_cost": 30.16,
+        "per_tablet": 1.01,
+        "prescribed": false,
+        "medicine_name": "Amodep 5 mg Tablet (15 Tab)",
+        "manufacturer": "FDC Ltd",
+        "line": 1
+       },
+       {
+        "brand": "Atorbest 10",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 3,
+        "pack_size": 10,
+        "pack_estimated": true,
+        "price_inr": 26.71,
+        "item_cost": 80.13,
+        "per_tablet": 2.67,
+        "prescribed": true,
+        "medicine_name": "Atorbest 10 mg Tablet (10 Tab)",
+        "manufacturer": "Cadila Pharmaceuticals Ltd",
+        "line": 2
+       },
+       {
+        "brand": "Telx 40mg",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 2,
+        "pack_size": 15,
+        "pack_estimated": false,
+        "price_inr": 64.12,
+        "item_cost": 128.24,
+        "per_tablet": 4.27,
+        "prescribed": false,
+        "medicine_name": "Telx 40 mg Tablet (15 Tab)",
+        "manufacturer": "Alteus Biogenics Pvt Ltd",
+        "line": 3
+       }
+      ],
+      "subtotal": 264.87,
+      "fee": 0.0,
+      "delivery_label": "FREE delivery (order ≥ ₹149)",
+      "free_delivery": true,
+      "total": 264.87
+     }
+    ]
+   },
+   "single_store": {
+    "total": 264.87,
+    "items_total": 264.87,
+    "fees_total": 0.0,
+    "stores": [
+     {
+      "platform": "SastaSundar",
+      "lines": [
+       {
+        "brand": "Dolo 650",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 1,
+        "pack_size": 15,
+        "pack_estimated": true,
+        "price_inr": 26.34,
+        "item_cost": 26.34,
+        "per_tablet": 1.76,
+        "prescribed": true,
+        "medicine_name": "Dolo 650 mg",
+        "manufacturer": "Micro Labs Ltd",
+        "line": 0
+       },
+       {
+        "brand": "Amodep 5",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 2,
+        "pack_size": 15,
+        "pack_estimated": false,
+        "price_inr": 15.08,
+        "item_cost": 30.16,
+        "per_tablet": 1.01,
+        "prescribed": false,
+        "medicine_name": "Amodep 5 mg Tablet (15 Tab)",
+        "manufacturer": "FDC Ltd",
+        "line": 1
+       },
+       {
+        "brand": "Atorbest 10",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 3,
+        "pack_size": 10,
+        "pack_estimated": true,
+        "price_inr": 26.71,
+        "item_cost": 80.13,
+        "per_tablet": 2.67,
+        "prescribed": true,
+        "medicine_name": "Atorbest 10 mg Tablet (10 Tab)",
+        "manufacturer": "Cadila Pharmaceuticals Ltd",
+        "line": 2
+       },
+       {
+        "brand": "Telx 40mg",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 2,
+        "pack_size": 15,
+        "pack_estimated": false,
+        "price_inr": 64.12,
+        "item_cost": 128.24,
+        "per_tablet": 4.27,
+        "prescribed": false,
+        "medicine_name": "Telx 40 mg Tablet (15 Tab)",
+        "manufacturer": "Alteus Biogenics Pvt Ltd",
+        "line": 3
+       }
+      ],
+      "subtotal": 264.87,
+      "fee": 0.0,
+      "delivery_label": "FREE delivery (order ≥ ₹149)",
+      "free_delivery": true,
+      "total": 264.87
+     }
+    ]
+   },
+   "lines": [
+    0,
+    1,
+    2,
+    3
+   ]
+  },
+  "as_prescribed": {
+   "best": {
+    "total": 395.57,
+    "items_total": 388.49,
+    "fees_total": 7.08,
+    "stores": [
+     {
+      "platform": "Apollo Pharmacy",
+      "lines": [
+       {
+        "brand": "Telma 40",
+        "platform": "Apollo Pharmacy",
+        "unit": "tablet",
+        "packs": 2,
+        "pack_size": 15,
+        "pack_estimated": false,
+        "price_inr": 108.0,
+        "item_cost": 216.0,
+        "per_tablet": 7.2,
+        "prescribed": true,
+        "medicine_name": "Telma 40 mg Tablet 15's",
+        "manufacturer": "Glenmark Pharmaceuticals Ltd",
+        "line": 3
+       }
+      ],
+      "subtotal": 216.0,
+      "fee": 7.08,
+      "delivery_label": "₹7.08 delivery · no free-delivery offer",
+      "free_delivery": false,
+      "total": 223.08
+     },
+     {
+      "platform": "SastaSundar",
+      "lines": [
+       {
+        "brand": "Dolo 650",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 1,
+        "pack_size": 15,
+        "pack_estimated": true,
+        "price_inr": 26.34,
+        "item_cost": 26.34,
+        "per_tablet": 1.76,
+        "prescribed": true,
+        "medicine_name": "Dolo 650 mg",
+        "manufacturer": "Micro Labs Ltd",
+        "line": 0
+       },
+       {
+        "brand": "Stamlo 5",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 1,
+        "pack_size": 30,
+        "pack_estimated": false,
+        "price_inr": 66.02,
+        "item_cost": 66.02,
+        "per_tablet": 2.2,
+        "prescribed": true,
+        "medicine_name": "Stamlo 5 mg Tablet (30 Tab)",
+        "manufacturer": "Dr Reddy's Laboratories Ltd",
+        "line": 1
+       },
+       {
+        "brand": "Atorbest 10",
+        "platform": "SastaSundar",
+        "unit": "tablet",
+        "packs": 3,
+        "pack_size": 10,
+        "pack_estimated": true,
+        "price_inr": 26.71,
+        "item_cost": 80.13,
+        "per_tablet": 2.67,
+        "prescribed": true,
+        "medicine_name": "Atorbest 10 mg Tablet (10 Tab)",
+        "manufacturer": "Cadila Pharmaceuticals Ltd",
+        "line": 2
+       }
+      ],
+      "subtotal": 172.49,
+      "fee": 0.0,
+      "delivery_label": "FREE delivery (order ≥ ₹149)",
+      "free_delivery": true,
+      "total": 172.49
+     }
+    ]
+   },
+   "single_store": {
+    "total": 433.5,
+    "items_total": 383.5,
+    "fees_total": 50.0,
+    "stores": [
+     {
+      "platform": "1mg",
+      "lines": [
+       {
+        "brand": "Dolo 650",
+        "platform": "1mg",
+        "unit": "tablet",
+        "packs": 1,
+        "pack_size": 15,
+        "pack_estimated": true,
+        "price_inr": 28.3,
+        "item_cost": 28.3,
+        "per_tablet": 1.89,
+        "prescribed": true,
+        "medicine_name": "Dolo 650 Tablet",
+        "manufacturer": "Micro Labs Ltd",
+        "line": 0
+       },
+       {
+        "brand": "Stamlo 5",
+        "platform": "1mg",
+        "unit": "tablet",
+        "packs": 1,
+        "pack_size": 30,
+        "pack_estimated": true,
+        "price_inr": 70.1,
+        "item_cost": 70.1,
+        "per_tablet": 2.34,
+        "prescribed": true,
+        "medicine_name": "Stamlo 5 Tablet",
+        "manufacturer": "Dr Reddy's Laboratories Ltd",
+        "line": 1
+       },
+       {
+        "brand": "Atorbest 10",
+        "platform": "1mg",
+        "unit": "tablet",
+        "packs": 3,
+        "pack_size": 10,
+        "pack_estimated": true,
+        "price_inr": 32.1,
+        "item_cost": 96.3,
+        "per_tablet": 3.21,
+        "prescribed": true,
+        "medicine_name": "Atorbest 10 Tablet",
+        "manufacturer": "Cadila Pharmaceuticals Ltd",
+        "line": 2
+       },
+       {
+        "brand": "Telma 40",
+        "platform": "1mg",
+        "unit": "tablet",
+        "packs": 2,
+        "pack_size": 15,
+        "pack_estimated": true,
+        "price_inr": 94.4,
+        "item_cost": 188.8,
+        "per_tablet": 6.29,
+        "prescribed": true,
+        "medicine_name": "Telma 40 Tablet",
+        "manufacturer": "Glenmark Pharmaceuticals Ltd",
+        "line": 3
+       }
+      ],
+      "subtotal": 383.5,
+      "fee": 50.0,
+      "delivery_label": "₹50 delivery · add ₹116.50 more for FREE delivery",
+      "free_delivery": false,
+      "total": 433.5
+     }
+    ]
+   },
+   "lines": [
+    0,
+    1,
+    2,
+    3
+   ]
+  },
+  "saving": 130.7,
+  "saving_lines": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "per_line": [
+   {
+    "line": 0,
+    "query": "Dolo 650",
+    "tablets": 15,
+    "tablets_how": "typed",
+    "cheapest_prescribed": {
+     "brand": "Dolo 650",
+     "platform": "SastaSundar",
+     "unit": "tablet",
+     "packs": 1,
+     "pack_size": 15,
+     "pack_estimated": true,
+     "price_inr": 26.34,
+     "item_cost": 26.34,
+     "per_tablet": 1.76,
+     "prescribed": true,
+     "medicine_name": "Dolo 650 mg",
+     "manufacturer": "Micro Labs Ltd"
+    },
+    "cheapest_any": {
+     "brand": "Dolo 650",
+     "platform": "SastaSundar",
+     "unit": "tablet",
+     "packs": 1,
+     "pack_size": 15,
+     "pack_estimated": true,
+     "price_inr": 26.34,
+     "item_cost": 26.34,
+     "per_tablet": 1.76,
+     "prescribed": true,
+     "medicine_name": "Dolo 650 mg",
+     "manufacturer": "Micro Labs Ltd"
+    }
+   },
+   {
+    "line": 1,
+    "query": "Stamlo 5 tablet",
+    "tablets": 30,
+    "tablets_how": "typed",
+    "cheapest_prescribed": {
+     "brand": "Stamlo 5",
+     "platform": "SastaSundar",
+     "unit": "tablet",
+     "packs": 1,
+     "pack_size": 30,
+     "pack_estimated": false,
+     "price_inr": 66.02,
+     "item_cost": 66.02,
+     "per_tablet": 2.2,
+     "prescribed": true,
+     "medicine_name": "Stamlo 5 mg Tablet (30 Tab)",
+     "manufacturer": "Dr Reddy's Laboratories Ltd"
+    },
+    "cheapest_any": {
+     "brand": "Amodep 5",
+     "platform": "SastaSundar",
+     "unit": "tablet",
+     "packs": 2,
+     "pack_size": 15,
+     "pack_estimated": false,
+     "price_inr": 15.08,
+     "item_cost": 30.16,
+     "per_tablet": 1.01,
+     "prescribed": false,
+     "medicine_name": "Amodep 5 mg Tablet (15 Tab)",
+     "manufacturer": "FDC Ltd"
+    }
+   },
+   {
+    "line": 2,
+    "query": "Atorbest 10",
+    "tablets": 30,
+    "tablets_how": "typed",
+    "cheapest_prescribed": {
+     "brand": "Atorbest 10",
+     "platform": "SastaSundar",
+     "unit": "tablet",
+     "packs": 3,
+     "pack_size": 10,
+     "pack_estimated": true,
+     "price_inr": 26.71,
+     "item_cost": 80.13,
+     "per_tablet": 2.67,
+     "prescribed": true,
+     "medicine_name": "Atorbest 10 mg Tablet (10 Tab)",
+     "manufacturer": "Cadila Pharmaceuticals Ltd"
+    },
+    "cheapest_any": {
+     "brand": "Atorbest 10",
+     "platform": "SastaSundar",
+     "unit": "tablet",
+     "packs": 3,
+     "pack_size": 10,
+     "pack_estimated": true,
+     "price_inr": 26.71,
+     "item_cost": 80.13,
+     "per_tablet": 2.67,
+     "prescribed": true,
+     "medicine_name": "Atorbest 10 mg Tablet (10 Tab)",
+     "manufacturer": "Cadila Pharmaceuticals Ltd"
+    }
+   },
+   {
+    "line": 3,
+    "query": "Telma 40",
+    "tablets": 30,
+    "tablets_how": "typed",
+    "cheapest_prescribed": {
+     "brand": "Telma 40",
+     "platform": "Apollo Pharmacy",
+     "unit": "tablet",
+     "packs": 2,
+     "pack_size": 15,
+     "pack_estimated": false,
+     "price_inr": 108.0,
+     "item_cost": 216.0,
+     "per_tablet": 7.2,
+     "prescribed": true,
+     "medicine_name": "Telma 40 mg Tablet 15's",
+     "manufacturer": "Glenmark Pharmaceuticals Ltd"
+    },
+    "cheapest_any": {
+     "brand": "Telmiride 40",
+     "platform": "1mg",
+     "unit": "tablet",
+     "packs": 3,
+     "pack_size": 10,
+     "pack_estimated": true,
+     "price_inr": 22.7,
+     "item_cost": 68.1,
+     "per_tablet": 2.27,
+     "prescribed": false,
+     "medicine_name": "Telmiride 40 Tablet",
+     "manufacturer": "Unison Pharmaceuticals Pvt Ltd"
+    }
+   }
+  ],
+  "unavailable": [],
+  "stats": {
+   "combinations": 4043,
+   "ms": 15.7
+  },
+  "skipped": [],
+  "timings": {
+   "basket_ms": 106
+  }
+ },
+ "dosage_guard": {
+  "input": "Dolo 500",
+  "nearest": "dolo 650 price",
+  "similarity": 0.949,
+  "decision": "api_call",
+  "reason": "Similar enough, but the numbers (dose) differ — dosage guard forces a fresh search"
+ }
+}

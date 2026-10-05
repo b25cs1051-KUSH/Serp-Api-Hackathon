@@ -1,3 +1,5 @@
+import DemoPanel from "@/components/landing/DemoPanel";
+import HeroSaving from "@/components/landing/HeroSaving";
 import LandingFooter from "@/components/landing/LandingFooter";
 import { Benchmark, Capabilities, ForDevelopers, Hero, HowItWorks } from "@/components/landing/Sections";
 import LegacyViewRedirect from "@/components/shell/LegacyViewRedirect";
@@ -10,8 +12,8 @@ export default function Home() {
       <main className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">
         <LegacyViewRedirect />
         <SiteHeader />
-        <Hero />
-        {/* 2. Split demo panel: U3 */}
+        <Hero aside={<HeroSaving />} />
+        <DemoPanel />
         <Capabilities />
         <HowItWorks />
         <Benchmark />
