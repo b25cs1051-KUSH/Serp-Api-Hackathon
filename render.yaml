@@ -48,7 +48,6 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    rootDir: web
     dockerContext: ./web
     dockerfilePath: ./web/Dockerfile
     healthCheckPath: /
