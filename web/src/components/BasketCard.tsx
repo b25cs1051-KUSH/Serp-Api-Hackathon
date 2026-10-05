@@ -1,13 +1,12 @@
 "use client";
 
 import { AlertTriangle, Pill as PillIcon } from "lucide-react";
-import { useState } from "react";
 import { type BasketResult, type RxItem, type RxLine } from "@/lib/api";
 import LineComparison from "./LineComparison";
-import PlanCards, { PLANS, type PlanId } from "./PlanCards";
+import { PLANS, PlanHeader, SwapNote } from "./PlanCards";
 import StoreOrders from "./StoreOrders";
 
-/** A whole prescription: three ways to buy it side by side, each medicine compared, then the orders. */
+/** A whole prescription: each way to buy it followed by its own orders, then each medicine compared. */
 export default function BasketCard({
   basket,
   lines,
@@ -21,7 +20,6 @@ export default function BasketCard({
   running: boolean;
   onPick: (line: number, query: string) => void;
 }) {
-  const [selected, setSelected] = useState<PlanId>("cheapest");
   const skipped = Object.values(lines).filter((l) => l.status === "choose");
   const name = (i: number) => items[i]?.q ?? lines[i]?.query ?? `Medicine ${i + 1}`;
 
@@ -50,26 +48,28 @@ export default function BasketCard({
     );
   }
 
-  const chosen = PLANS.find((p) => p.id === selected) ?? PLANS[0];
-  const plan = chosen.pick(basket) ?? basket.with_swaps.best;
   const priced = items.length - skipped.length;
 
   return (
     <div className="space-y-4">
       {skipped.map((l) => <ChooseLine key={l.line} line={l} onPick={onPick} />)}
 
-      <PlanCards basket={basket} total={priced} selected={selected} onSelect={setSelected} />
+      {PLANS.map(({ id, pick }) => {
+        const plan = pick(basket);
+        return (
+          <section key={id} className="space-y-3">
+            <PlanHeader basket={basket} id={id} total={priced} />
+            {plan && (
+              <div className="border-l-2 border-line pl-3 md:pl-4">
+                <StoreOrders plan={plan} items={items} />
+              </div>
+            )}
+          </section>
+        );
+      })}
+      <SwapNote basket={basket} />
 
       <LineComparison basket={basket} lines={lines} items={items} />
-
-      {plan && (
-        <div className="space-y-3">
-          <h3 className="px-1 text-sm font-semibold text-muted">
-            Your orders · <span className="text-ink">{chosen.pick(basket) ? chosen.title : PLANS[0].title}</span>
-          </h3>
-          <StoreOrders plan={plan} items={items} />
-        </div>
-      )}
 
       {basket.unavailable.length > 0 && (
         <div className="flex items-start gap-2 rounded-xl border border-miss/30 bg-miss/[0.07] px-4 py-3 text-sm text-miss">

@@ -44,7 +44,11 @@ export default function LineComparison({
               <div>
                 <div className="font-medium">{it.q}</div>
                 <div className="text-[11px] text-faint">
-                  {p?.tablets ? `${p.tablets} tablets${p.tablets_how === "one pack" ? " (1 pack)" : ""}` : ""}
+                  {p?.tablets
+                    ? p.tablets_how === "items" || p.tablets_how === "one item"
+                      ? `${p.tablets} item${p.tablets === 1 ? "" : "s"}`
+                      : `${p.tablets} tablets${p.tablets_how === "one pack" ? " (1 pack)" : ""}`
+                    : ""}
                 </div>
               </div>
               {l?.status === "choose" ? (
@@ -81,7 +85,8 @@ function OfferCell({ offer, empty, highlight, badge }: { offer: Offer; empty: st
       </div>
       <div className="tnum text-[11px] text-muted">
         {offer.platform} · {inr(offer.item_cost)} · {offer.pack_estimated ? "~" : ""}
-        {inr(offer.per_tablet)}/tablet
+        {inr(offer.per_tablet)}
+        {offer.unit === "item" ? " each" : "/tablet"}
       </div>
     </div>
   );

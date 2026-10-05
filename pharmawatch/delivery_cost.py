@@ -48,6 +48,7 @@ PLATFORM_ALIASES: List[Tuple[str, str]] = [
     ("medivik", "medivik"),
     ("medizinhub", "medizinhub"),
     ("kogland", "kogland_commerce"),
+    ("sastasundar", "sastasundar"),
 ]
 
 _PIN_RE = re.compile(r"^[1-9]\d{5}$")

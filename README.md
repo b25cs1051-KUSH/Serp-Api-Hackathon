@@ -411,8 +411,11 @@ Requirements: Docker. Put your keys in `.env` in the repo root (git-ignored):
 
 ```bash
 SERP_API_KEY=...
+SERP_API_KEY_2=...
 GEMINI_API_KEY=...
 ```
+
+The second SerpApi key is optional. Docker Compose uses it only after the first key runs out.
 
 Then:
 

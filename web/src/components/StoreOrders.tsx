@@ -31,7 +31,10 @@ function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
   const list = [
     `${store.platform}:`,
     ...store.lines.map(
-      (o) => `- ${o.brand} × ${o.packs} pack${o.packs === 1 ? "" : "s"} (${o.packs * o.pack_size} tablets) ${inr(o.item_cost)}`,
+      (o) =>
+        o.unit === "item"
+          ? `- ${o.brand} × ${o.packs} ${inr(o.item_cost)}`
+          : `- ${o.brand} × ${o.packs} pack${o.packs === 1 ? "" : "s"} (${o.packs * o.pack_size} tablets) ${inr(o.item_cost)}`,
     ),
     `Total ${inr(store.total)}${store.fee > 0 ? ` incl. ${inr(store.fee)} delivery` : ", free delivery"}`,
   ].join("\n");
@@ -82,8 +85,14 @@ function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
                 <div className="mt-0.5 line-clamp-1 text-xs text-faint" title={o.medicine_name}>
                   {o.manufacturer ? `${o.manufacturer} · ` : ""}
                   <span className="text-muted">
-                    {o.packs} pack{o.packs === 1 ? "" : "s"} × {o.pack_estimated ? "~" : ""}
-                    {o.pack_size} tablets
+                    {o.unit === "item" ? (
+                      `${o.packs} item${o.packs === 1 ? "" : "s"}`
+                    ) : (
+                      <>
+                        {o.packs} pack{o.packs === 1 ? "" : "s"} × {o.pack_estimated ? "~" : ""}
+                        {o.pack_size} tablets
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
@@ -91,7 +100,8 @@ function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
                 <div className="tnum font-mono text-sm font-semibold">{inr(o.item_cost)}</div>
                 <div className="tnum text-[11px] text-muted">
                   {o.pack_estimated ? "~" : ""}
-                  {inr(o.per_tablet)}/tablet
+                  {inr(o.per_tablet)}
+                  {o.unit === "item" ? " each" : "/tablet"}
                 </div>
               </div>
               {href && (

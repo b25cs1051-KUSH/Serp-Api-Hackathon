@@ -27,10 +27,12 @@ direct_link: filled only for the top MAIN_DIRECT_LINKS main listings and for che
 listing keeps direct_link "" (search_link and google_link remain as fallbacks).
 """
 
+import re
 import time
 import warnings
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from typing import Any, Dict, Iterator, List, Optional, Tuple
+from urllib.parse import unquote, urlsplit
 
 from pharmawatch.delivery_cost import normalize_pincode
 from pharmawatch.distiller import sanitize_link
@@ -60,10 +62,26 @@ def _tagged(tag: str, fn, *args):
         return fn(*args)
 
 
+def names_product(url: str, row: dict) -> bool:
+    """
+    The product page names the listing's brand. Google's product page can group a listing with a
+    different product at the same pharmacy (a 'Pantodac-DSR' offer whose 1mg link was Pantoder DSR);
+    such a page must not be shown as this medicine's.
+    """
+    key = row.get("brand") or row.get("medicine_name") or ""
+    word = next((w for w in re.findall(r"[a-z]+", key.lower()) if len(w) >= 3), None)
+    if not word:
+        return True
+    path = re.sub(r"[^a-z0-9]", "", unquote(unquote(urlsplit(url).path)).lower())
+    return word in path
+
+
 def _fetch_direct_link(row: dict) -> str:
-    """The listing's own pharmacy product page, or '' if it can't be resolved."""
+    """The listing's own pharmacy product page, or '' if it can't be resolved or is another product."""
     link = get_direct_merchant_link(row["page_token"], target_platform=row.get("platform"), verbose=False)
-    return sanitize_link(link) if link else ""
+    if not link or not names_product(link, row):
+        return ""
+    return sanitize_link(link)
 
 
 class _Links:

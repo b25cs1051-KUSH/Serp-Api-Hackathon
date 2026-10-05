@@ -1,7 +1,8 @@
 "use client";
 
-import { Loader2, MapPin, Plus, Search, X } from "lucide-react";
+import { Loader2, MapPin, Plus, Search, Stethoscope, X } from "lucide-react";
 import type { RxItem } from "@/lib/api";
+import { KITS, matchingKit } from "@/lib/kits";
 
 export const RX_EXAMPLE: RxItem[] = [
   { q: "Dolo 650", tablets: 30 },
@@ -38,6 +39,7 @@ export default function PrescriptionForm({
   const update = (i: number, patch: Partial<RxItem>) => setItems(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
   const remove = (i: number) => setItems(items.length > 1 ? items.filter((_, j) => j !== i) : [{ q: "", tablets: null }]);
   const valid = items.filter((it) => it.q.trim().length >= 2);
+  const kit = matchingKit(items);
 
   const onPaste = (i: number, e: React.ClipboardEvent<HTMLInputElement>) => {
     const text = e.clipboardData.getData("text");
@@ -57,6 +59,30 @@ export default function PrescriptionForm({
       }}
       className="card mt-6 space-y-2 p-3"
     >
+      <div className="px-1 pb-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] uppercase tracking-wider text-faint">Common prescriptions</span>
+          {KITS.map((k) => (
+            <button
+              key={k.id}
+              type="button"
+              onClick={() => setItems(k.items)}
+              aria-pressed={kit?.id === k.id}
+              className={`rounded-full border px-3 py-1 text-xs transition ${
+                kit?.id === k.id ? "border-hit/60 bg-hit/10 text-hit" : "border-line text-muted hover:border-hit/40 hover:text-ink"
+              }`}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+        {kit && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-sem">
+            <Stethoscope className="h-3.5 w-3.5 shrink-0" />
+            Typical {kit.label.toLowerCase()} prescription: edit it to match yours. Ask your doctor before changing medicines.
+          </p>
+        )}
+      </div>
       <div className="hidden grid-cols-[minmax(0,1fr)_7.5rem_2rem] gap-2 px-1 text-[11px] uppercase tracking-wider text-faint sm:grid">
         <span>Medicine (brand or salt with strength)</span>
         <span>Tablets (optional)</span>
@@ -132,7 +158,7 @@ export default function PrescriptionForm({
         </button>
       </div>
       <p className="px-1 text-[11px] text-faint">
-        Up to {MAX_LINES} medicines. Leave tablets empty to buy one pack. Every medicine is searched at the same time.
+        Up to {MAX_LINES} medicines. Leave the count empty to buy one pack (or one bottle/tube). Every medicine is searched at the same time.
       </p>
     </form>
   );

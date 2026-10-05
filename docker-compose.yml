@@ -22,6 +22,7 @@ services:
     env_file: .env
     environment:
       REDIS_HOST: redis
+      SERPAPI_ROTATE_KEYS: "1"
       UI_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
     ports:
       - "8000:8000"

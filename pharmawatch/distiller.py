@@ -21,7 +21,7 @@ TARGET_PHARMA_DOMAINS = [
     "netmeds.com",
     "apollopharmacy.in",
     "apollo247.com",
-    "medplusbazaar.com",
+    "medplusmart.com",
 ]
 
 TARGET_PHARMA_NAMES = [
@@ -87,6 +87,7 @@ PLATFORM_NAME_PATTERNS = [
     ("medivik", "Medivik"),
     ("medizinhub", "Medizinhub"),
     ("kogland", "Kogland Commerce"),
+    ("sastasundar", "SastaSundar"),
 ]
 
 
@@ -95,7 +96,7 @@ PLATFORM_DOMAIN_MAP = {
     "PharmEasy": "pharmeasy.in",
     "Netmeds": "netmeds.com",
     "Apollo Pharmacy": "apollopharmacy.in",
-    "Medplus": "medplusbazaar.com",
+    "Medplus": "medplusmart.com",
 }
 
 
@@ -116,7 +117,6 @@ DIRECT_STORE_SEARCH_TEMPLATES = {
     "PharmEasy": "https://pharmeasy.in/search/all?name={query}",
     "Netmeds": "https://www.netmeds.com/catalogsearch/result/{query}/all",
     "Apollo Pharmacy": "https://www.apollopharmacy.in/search-medicines/{query}",
-    "Medplus": "https://www.medplusbazaar.com/search/{query}",
 }
 
 

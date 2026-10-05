@@ -159,7 +159,8 @@ def prescription_stream(
             key = (o["platform"], o["medicine_name"], o["price_inr"])
             if key not in link_futures:
                 link_futures[key] = _POOL.submit(_tagged, f"direct link (basket): {o['brand']} @ {o['platform']}",
-                                                 _fetch_direct_link, {"page_token": o["page_token"], "platform": o["platform"]})
+                                                 _fetch_direct_link, {"page_token": o["page_token"], "platform": o["platform"],
+                                                                      "brand": o["brand"], "medicine_name": o["medicine_name"]})
         wait(list(link_futures.values()))
         for o in chosen:
             f = link_futures[(o["platform"], o["medicine_name"], o["price_inr"])]

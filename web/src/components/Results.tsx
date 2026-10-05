@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, MapPin, Trophy, Truck } from "lucide-react";
-import { inr, type Listing } from "@/lib/api";
+import { buyLink, inr, isProductLink, type Listing } from "@/lib/api";
 
 const STATUS_STYLE: Record<Listing["delivery_status"], string> = {
   free: "text-hit",
@@ -70,9 +70,9 @@ export default function Results({
             </thead>
             <tbody>
               {listings.map((l, i) => {
-                const direct = l.direct_link;
+                const direct = isProductLink(l);
                 const pending = wantLinks && !linksResolved && i < 5;
-                const href = direct || l.search_link || l.google_link;
+                const href = buyLink(l);
                 return (
                   <tr key={`${l.platform}-${l.medicine_name}-${l.price_inr}-${i}`} className={`rise border-b border-line/60 ${l.is_cheapest ? "bg-hit/[0.04]" : ""}`}>
                     <td className="py-3 pr-3 align-top">

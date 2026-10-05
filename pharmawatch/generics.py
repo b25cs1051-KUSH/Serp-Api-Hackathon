@@ -517,6 +517,8 @@ def main_listings(rows: List[dict], name: str, pincode, allow_other_forms: bool 
             maker = g["manufacturer"] if g else match.get("manufacturer")
             if maker:
                 r["manufacturer"] = maker
+            if g:
+                r["brand"] = g["brand"]
     return rank_by_landed_price(matched, pincode)
 
 

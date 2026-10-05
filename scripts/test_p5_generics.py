@@ -320,6 +320,7 @@ def check_stamlo_pipeline() -> list:
     alt = got["alternatives"]
     cheaper = alt["cheaper_alternatives"][0] if alt["cheaper_alternatives"] else {}
     by_brand = {r["brand"]: r for r in alt["other_alternatives"]}
+    brands = lambda a: sorted(r["brand"] for r in a["cheaper_alternatives"] + a["other_alternatives"])
     main_links = {r["medicine_name"]: r["direct_link"] for r in got["main_links"]}
     link_calls = sorted(requested)
 
@@ -335,8 +336,8 @@ def check_stamlo_pipeline() -> list:
               [(k, v is None) for k, v in outside], [("main", False), ("alternatives", True), ("main_links", False)]),
         # Amlopres 5 is only listed in the Amtas search here, so it goes too; the rest carries on.
         check("Failed substitute search only loses its own listings",
-              (failed["alternatives"]["not_found"], len(failed["alternatives"]["cheaper_alternatives"])),
-              (["Amtas 5", "Amlopres 5"], 1)),
+              (failed["alternatives"]["not_found"], brands(failed["alternatives"])),
+              (["Amtas 5", "Amlopres 5"], ["Amlokind 5"])),
     ] + [
         check("Event order", [k for k, _ in events], ["main", "main_update", "alternatives", "main_links"]),
         check("Main: look-alikes dropped", titles(got["main"]), ["Stamlo 5MG Tablet", "Stamlo-5 Tablet 30's"]),
@@ -344,16 +345,15 @@ def check_stamlo_pipeline() -> list:
         check("Reference = Chemist180, pack estimated",
               (alt["reference"]["platform"], alt["reference"]["pack_size"], alt["reference"]["pack_estimated"]),
               ("Chemist180", 30, True)),
-        check("Cheaper: Amlokind @ Chemist180, estimated",
-              (cheaper.get("brand"), cheaper.get("platform"), cheaper.get("estimated")), ("Amlokind 5", "Chemist180", True)),
-        check("Cheaper alt has its direct link", cheaper.get("direct_link"), "https://Chemist180/t-amlokind-c180"),
-        check("Amlopres found via pooling (Amtas search)", by_brand.get("Amlopres 5", {}).get("platform"), "Kogland Commerce"),
-        check("Not-cheaper alt: direct_link empty", by_brand.get("Amlopres 5", {}).get("direct_link"), ""),
+        check("Cheaper: Amlopres @ Kogland, found via pooling (Amtas search)",
+              (cheaper.get("brand"), cheaper.get("platform")), ("Amlopres 5", "Kogland Commerce")),
+        check("Cheaper alt has its direct link", cheaper.get("direct_link"), "https://Kogland%20Commerce/t-amlopres-kog"),
+        check("Not-cheaper alt: direct_link empty", by_brand.get("Amlokind 5", {}).get("direct_link"), ""),
         check("Amtas genuinely not found", alt["not_found"], ["Amtas 5"]),
         check("Main links on all top rows", all(main_links.values()), True),
         check("No link spent on look-alikes", sorted(t for t in requested if t in ("t-esta", "t-bis", "t-at")), []),
         check("Link lookups made", link_calls,
-              sorted(["t-stamlo-c180", "t-stamlo-apollo", "t-stamlo-pe", "t-amlokind-c180"])),
+              sorted(["t-stamlo-c180", "t-stamlo-apollo", "t-stamlo-pe", "t-amlopres-kog"])),
     ]
 
 
@@ -514,6 +514,16 @@ def run_checks() -> bool:
         check("Pharmacy not among stores → None (no other store's link)", pick_store_link(stores, "PharmEasy"), None),
         check("No target → first store", pick_store_link(stores, None), "https://www.1mg.com/drugs/x"),
         check("Stores without links ignored", pick_store_link([{"name": "1mg"}], "1mg"), None),
+        # Live run: a 'Pantodac-DSR' offer's 1mg link was Pantoder DSR's page.
+        check("Link to another product rejected",
+              pipeline.names_product("https://www.1mg.com/drugs/pantoder-dsr-capsule-1109188",
+                                     {"brand": "Pantodac DSR", "medicine_name": "Pantodac-DSR 15 Capsules"}), False),
+        check("Brand found past the maker's name",
+              pipeline.names_product("https://www.dawaadost.com/hi/medicine/dolo-650mg-tablet-15s",
+                                     {"brand": "Dolo 650", "medicine_name": "Micro Labs Dolo 650mg Tablets 15s"}), True),
+        check("Encoded slug still matches",
+              pipeline.names_product("https://www.medplusmart.com/product/fepanil%252525252d650mg%252525252dtab_FEPA0008",
+                                     {"medicine_name": "Fepanil 650mg Tab"}), True),
     ]
     results += check_exact_only_cache()
     results += check_key_safety_and_reconnect()
