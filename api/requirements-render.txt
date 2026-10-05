@@ -9,3 +9,4 @@ tokenizers>=0.19
 huggingface_hub>=0.23
 fastapi>=0.110
 uvicorn[standard]>=0.29
+mcp>=2.2,<3                  # /mcp: the public MCP connector (pharmawatch_mcp)

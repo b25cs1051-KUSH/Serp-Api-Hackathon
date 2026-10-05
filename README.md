@@ -499,10 +499,16 @@ browser `EventSource` can't read an HTTP error body.
 
 ## Use it from Claude (MCP)
 
-`mcp_server.py` exposes PharmaWatch as an [MCP](https://modelcontextprotocol.io) server over stdio, built on the
-official Python SDK. Every tool calls the same code as the web app's HTTP API (`api/main.py`), so input
-validation, the concurrency limit, the search deadline, the daily credit budget and credit accounting are shared.
-An agent gets the same answers a shopper gets on the website.
+PharmaWatch is an [MCP](https://modelcontextprotocol.io) server, built on the official Python SDK, in two ways:
+
+- **Public connector, nothing to install:** `https://pharmawatch-api-zmwy.onrender.com/mcp` (Streamable HTTP),
+  served by the same process as the website's API. `server.json` describes it for the official MCP Registry as
+  `io.github.b25cs1051-KUSH/pharmawatch`.
+- **Local, over stdio:** `python mcp_server.py`, for Claude Desktop, Cursor and MCP Inspector with your own keys.
+
+Every tool calls the same code as the web app's HTTP API (`api/main.py`), so input validation, the concurrency
+limit, the search deadline, the daily credit budget and credit accounting are shared. An agent gets the same
+answers a shopper gets on the website.
 
 | Tool | What it does | Credits |
 |---|---|---|
@@ -538,7 +544,15 @@ Design choices:
 - **Clean stdout.** The protocol runs on a private copy of stdout. Console prints from the cache and library
   warnings go to stderr, which MCP clients keep as the server log.
 
-**Claude Desktop** (`claude_desktop_config.json`; use your own absolute path and Python):
+**Add the public connector:**
+
+- **Claude** (claude.ai or Claude Desktop): Settings → Connectors → Add custom connector → URL
+  `https://pharmawatch-api-zmwy.onrender.com/mcp`.
+- **Cursor** (`~/.cursor/mcp.json`) or any client that takes a URL:
+  `{"mcpServers": {"pharmawatch": {"url": "https://pharmawatch-api-zmwy.onrender.com/mcp"}}}`
+- The free host sleeps when idle; the first call after that can take about a minute.
+
+**Run it locally instead** (`claude_desktop_config.json`; use your own absolute path and Python):
 
 ```json
 {
@@ -554,10 +568,24 @@ Design choices:
 The server reads `.env` from the repo root, whatever directory the client starts it in. Redis must be running
 (`docker compose up -d redis`, or the full stack).
 
+**Code layout** (`pharmawatch_mcp/`; `mcp_server.py` is only the stdio launcher):
+
+| Module | Job |
+|---|---|
+| `app.py` | The server instance and the instructions the model reads |
+| `models.py` | Typed inputs and outputs; each output model is a tool's `outputSchema` |
+| `convert.py` | The API's result dicts → output models (links, plans, spelling, savings) |
+| `render.py` | Output models → compact Markdown |
+| `tools.py` | The five tools, progress reporting, error mapping |
+| `prompts.py` | `compare_medicine`, `plan_my_prescription` |
+| `schemas.py` | `$ref` inlining for clients that don't resolve `$defs` |
+| `stdio.py` / `remote.py` | Local transport / Streamable HTTP at `/mcp` on the API (`MCP_ALLOWED_HOSTS` for Host checks) |
+
 **MCP Inspector:**
 
 ```bash
-npx @modelcontextprotocol/inspector python mcp_server.py                     # web UI
+npx @modelcontextprotocol/inspector python mcp_server.py                     # web UI (local)
+npx @modelcontextprotocol/inspector --transport http --server-url https://pharmawatch-api-zmwy.onrender.com/mcp
 npx @modelcontextprotocol/inspector --cli python mcp_server.py --method tools/list
 ```
 
@@ -652,7 +680,8 @@ pharmawatch/
   drug_db/medicines.sqlite.gz   246,046 medicines from the Indian Medicine Dataset (MIT)
 notes/postal_codes_delivery_rules.json   PIN zones and delivery fees per pharmacy
 api/                    FastAPI layer (SSE search, health, cache lab)
-mcp_server.py           MCP server (stdio): search, prescription basket and cache lab as tools
+mcp_server.py           MCP stdio launcher
+pharmawatch_mcp/        MCP server: 5 tools, 2 prompts, typed output; also served over HTTP at /mcp
 web/                    Next.js UI
 scripts/                offline tests, live replay, threshold tuning
 docker-compose.yml      Redis + API + UI, with healthchecks (api/Dockerfile, web/Dockerfile)
