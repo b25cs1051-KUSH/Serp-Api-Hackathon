@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-@theme inline {
+/* Colours are referenced through var() (not inlined) so a scope like .theme-light can remap them. */
+@theme {
   --color-bg: #07090d;
   --color-panel: #0d1117;
   --color-panel-2: #121821;
@@ -13,11 +14,9 @@
   --color-miss: #fbbf24;
   --color-bad: #fb7185;
   --color-llm: #c084fc;
-  --font-sans: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-code), ui-monospace, "Cascadia Code", monospace;
 
-  /* Light design system (landing page and shop; applied from U2). Semantic colours mean the same
-     everywhere: save = free or saving, warn = costs a credit or a fee, error = blocked or unavailable. */
+  /* Light design system. Semantic colours mean the same everywhere: save = free or saving,
+     warn = costs a credit or a fee, error = blocked or unavailable. */
   --color-ground: #fbfbf9;
   --color-text: #111418;
   --color-subtle: #5f6670;
@@ -28,6 +27,53 @@
   --color-warn: #b8640a;
   --color-error: #c2413b;
   --color-console: #0f1417;
+}
+
+@theme inline {
+  --font-sans: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, "Cascadia Code", monospace;
+}
+
+/* Light pages: the dark tokens remapped, so shared components render light inside this scope. */
+.theme-light {
+  color-scheme: light;
+  --color-bg: #fbfbf9;
+  --color-panel: #ffffff;
+  --color-panel-2: #f3f4f1;
+  --color-line: #e5e6e3;
+  --color-ink: #111418;
+  --color-muted: #5f6670;
+  --color-faint: #6b7079;
+  --color-hit: #0b8a63;
+  --color-sem: #1f5fa8;
+  --color-miss: #b8640a;
+  --color-bad: #c2413b;
+  --color-llm: #6d3fc0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+/* The engine's console surface, dark inside any page. */
+.theme-console {
+  color-scheme: dark;
+  --color-bg: #0f1417;
+  --color-panel: #141b1f;
+  --color-panel-2: #1a2227;
+  --color-line: #263037;
+  --color-ink: #e6edf3;
+  --color-muted: #9aa7b4;
+  --color-faint: #7c8995;
+  --color-hit: #34d399;
+  --color-sem: #60a5fa;
+  --color-miss: #fbbf24;
+  --color-bad: #fb7185;
+  --color-llm: #c084fc;
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
 :root {
