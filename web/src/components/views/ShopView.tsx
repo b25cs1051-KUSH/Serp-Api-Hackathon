@@ -1,12 +1,11 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
-import { useState } from "react";
-import BasketCard from "@/components/BasketCard";
+import { useCallback, useState } from "react";
 import ChooseCard from "@/components/ChooseCard";
-import PrescriptionForm from "@/components/PrescriptionForm";
 import SiteFooter from "@/components/shell/SiteFooter";
+import CartPanel from "@/components/shop/CartPanel";
 import ProductCard, { delivered } from "@/components/shop/ProductCard";
+import Receipt from "@/components/shop/Receipt";
 import ShopHeader from "@/components/shop/ShopHeader";
 import { EmptyState, ErrorNote, FilterChips, LoadingCards, deliveryHours, type Filter } from "@/components/shop/ShopStates";
 import SwapSection from "@/components/shop/SwapSection";
@@ -17,13 +16,14 @@ import { useSearch } from "@/lib/useSearch";
 
 /** Medicines cached on the price engine at the time of writing (0 credits to search). */
 const EXAMPLES = ["Atorbest 10", "Stamlo 5", "Dolo 650", "Telma 40", "Pan 40"];
-const BLANK: RxItem[] = [{ q: "", tablets: null }];
 
 /** The shop: what a buyer sees. No calls, credits, timings or cache here. */
 export default function ShopView() {
   const [query, setQuery] = useState("");
   const [pincode, setPincode] = useState("110001");
-  const [view, setView] = useState<"search" | "cart">("search");
+  const [view, setView] = useState<"search" | "receipt">("search");
+  const [cartOpen, setCartOpen] = useState(false);
+  const closeCart = useCallback(() => setCartOpen(false), []);
   const [filter, setFilter] = useState<Filter>("cheapest");
   const cart = useCart();
 
@@ -43,7 +43,10 @@ export default function ShopView() {
   };
   const submitRx = (items: RxItem[] = cart.items) => {
     const clean = items.map((it) => ({ q: it.q.trim().replace(/\s+/g, " "), tablets: it.tablets })).filter((it) => it.q.length >= 2);
-    if (!clean.length || rxRunning) return;
+    if (!clean.length || rxRunning || pincode.length !== 6) return;
+    setCartOpen(false);
+    setView("receipt");
+    window.scrollTo({ top: 0 });
     rx.run(clean, pincode, false);
   };
   const pickRx = (line: number, q: string) => {
@@ -74,34 +77,14 @@ export default function ShopView() {
         running={running}
         onSearch={() => search()}
         cartCount={cart.count}
-        onCart={() => setView("cart")}
+        onCart={() => setCartOpen(true)}
       />
 
       <main className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">
-        {view === "cart" ? (
-          <section className="py-6">
-            <button type="button" onClick={() => setView("search")} className="flex items-center gap-1.5 text-sm text-muted hover:text-ink">
-              <ArrowLeft className="h-4 w-4" /> Back to search
-            </button>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight">Your cart</h1>
-            <p className="mt-1 text-sm text-muted">Add medicines from search, paste your prescription, or start from a common one.</p>
-            <PrescriptionForm
-              items={cart.items.length ? cart.items : BLANK}
-              setItems={cart.set}
-              pincode={pincode}
-              setPincode={setPincode}
-              running={rxRunning}
-              onSubmit={() => submitRx()}
-            />
-            {rx.state.status !== "idle" && (
-              <div className="mt-6 space-y-5">
-                {rx.state.error && <ErrorNote message={rx.state.error} />}
-                <BasketCard basket={rx.state.basket} lines={rx.state.lines} items={rx.state.items} running={rxRunning} onPick={pickRx} />
-              </div>
-            )}
-          </section>
+        {view === "receipt" && rx.state.status !== "idle" ? (
+          <Receipt rx={rx.state} onPick={pickRx} onEdit={() => setCartOpen(true)} onBack={state.status !== "idle" ? () => setView("search") : undefined} />
         ) : state.status === "idle" ? (
-          <EmptyState examples={EXAMPLES} onSearch={search} onPaste={() => setView("cart")} />
+          <EmptyState examples={EXAMPLES} onSearch={search} onPaste={() => setCartOpen(true)} />
         ) : (
           <section className="space-y-5 py-6">
             {state.error && <ErrorNote message={state.error} />}
@@ -154,6 +137,17 @@ export default function ShopView() {
         )}
         <SiteFooter />
       </main>
+
+      <CartPanel
+        open={cartOpen}
+        onClose={closeCart}
+        items={cart.items}
+        setItems={cart.set}
+        pincode={pincode}
+        setPincode={setPincode}
+        running={rxRunning}
+        onFind={() => submitRx()}
+      />
     </div>
   );
 }

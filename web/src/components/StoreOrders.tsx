@@ -82,6 +82,9 @@ function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
                     </span>
                   )}
                 </div>
+                {!o.prescribed && (
+                  <div className="mt-0.5 text-[11px] text-muted">Same salt, strength and form. Ask your doctor or pharmacist before switching brands.</div>
+                )}
                 <div className="mt-0.5 line-clamp-1 text-xs text-faint" title={o.medicine_name}>
                   {o.manufacturer ? `${o.manufacturer} · ` : ""}
                   <span className="text-muted">

@@ -32,12 +32,12 @@ export default function BasketCard({
           <div className="space-y-2">
             {items.map((it, i) => {
               const l = lines[i];
-              const state = !l ? "searching" : l.status === "choose" ? "needs a strength" : l.status === "main" ? "comparing brands" : "done";
+              const state = !l ? "searching…" : l.status === "choose" ? "pick a strength" : l.status === "main" ? "comparing brands…" : "done";
               return (
                 <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm">
                   <span className="truncate">{it.q}</span>
-                  <span className={`shrink-0 text-xs ${state === "done" ? "text-hit" : state === "needs a strength" ? "text-sem" : "text-muted"}`}>
-                    {state === "searching" || state === "comparing brands" ? <span className="shimmer inline-block h-3 w-20 rounded" /> : state}
+                  <span className={`shrink-0 text-xs ${state === "done" ? "text-hit" : state === "pick a strength" ? "text-sem" : "text-muted"}`}>
+                    {state}
                   </span>
                 </div>
               );
