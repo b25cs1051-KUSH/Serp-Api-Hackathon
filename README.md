@@ -31,7 +31,7 @@ share a composition, and Gemini, used for one narrow job: reading misspellings.
 - [Problems we hit, and what fixed them](#problems-we-hit-and-what-fixed-them)
 - [What one search costs](#what-one-search-costs)
 - [Setup](#setup)
-- [Use it from Claude (MCP)](#use-it-from-claude-mcp)
+- [Use it from Claude or Codex (MCP)](#use-it-from-claude-or-codex-mcp)
 - [Tests](#tests)
 - [Project layout](#project-layout)
 - [Known limits](#known-limits)
@@ -494,7 +494,7 @@ browser `EventSource` can't read an HTTP error body.
 
 ---
 
-## Use it from Claude (MCP)
+## Use it from Claude or Codex (MCP)
 
 `mcp_server.py` exposes PharmaWatch as an [MCP](https://modelcontextprotocol.io) server over stdio,
 built on the official Python SDK. Each tool is a thin wrapper over `api/main.py`, so input validation,
@@ -540,6 +540,33 @@ Design choices:
 The server reads `.env` from the repo root, whatever directory the client starts it in. Redis must be
 running (`docker compose up -d redis`, or the full stack).
 
+**Codex CLI or IDE (local Windows setup):** Install `requirements.txt` into this project's `.venv`,
+then register the same stdio server from PowerShell in the repo root. See the
+[Codex MCP configuration guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) for other platforms.
+
+```powershell
+$python = (Resolve-Path .venv\Scripts\python.exe).Path
+$server = (Resolve-Path mcp_server.py).Path
+codex mcp add pharmawatch -- $python $server
+codex mcp get pharmawatch
+```
+
+In `~/.codex/config.toml`, add these values under the resulting `[mcp_servers.pharmawatch]` section:
+
+```toml
+default_tools_approval_mode = "writes"
+tool_timeout_sec = 180
+```
+
+The approval setting prompts before `search_medicine` or `plan_prescription`, which can spend SerpApi
+credits; `cache_lab` and `cache_stats` are marked read-only. The 180-second timeout covers the default
+135-second prescription deadline. Raise it if `SEARCH_TIMEOUT_S` is increased. Codex stores the local
+server with absolute paths, so register it again after moving the repo or rebuilding `.venv` elsewhere.
+
+Restart the Codex IDE extension or open a new Codex session, then check `codex mcp list` or `/mcp` in
+the Codex CLI. Ask “Use pharmawatch cache_stats to check Redis” for a zero-credit check, or ask
+“Use pharmawatch to find the cheapest delivered price for Stamlo 5 to PIN 110001” for a live search.
+
 **MCP Inspector:**
 
 ```bash
@@ -547,8 +574,8 @@ npx @modelcontextprotocol/inspector python mcp_server.py                     # w
 npx @modelcontextprotocol/inspector --cli python mcp_server.py --method tools/list
 ```
 
-**Example.** Asking Claude *"Where is Stamlo 5 cheapest delivered to 110001, and is there a cheaper
-generic?"* makes it call `search_medicine`. Real output from a cached run (links shortened):
+**Example.** Asking Claude or Codex *"Where is Stamlo 5 cheapest delivered to 110001, and is there a
+cheaper generic?"* makes it call `search_medicine`. Real output from a cached run (links shortened):
 
 ```markdown
 ## Stamlo 5: delivered prices to PIN 110001

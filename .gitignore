@@ -8,3 +8,7 @@ build/
 venv/
 *.log
 scripts/.refcache/
+
+.vscode/
+docs/
+tests/
