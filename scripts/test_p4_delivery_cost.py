@@ -48,6 +48,12 @@ def run_checks() -> bool:
         check("Netmeds tier3 same slabs", q("Netmeds", 300, "250001")["delivery_fee"], 29.0),
         check("Magicine ₹4000 prepaid slab", q("Magicine Pharma", 4000, "110001")["delivery_label"],
               "₹69 delivery (prepaid only) · no free-delivery offer"),
+        check("Apollo below ₹199 points at the cheaper slab", q("Apollo", 108, "110001")["delivery_label"],
+              "₹93.22 delivery (₹79 + GST) · add ₹91 more to pay ₹7.08"),
+        check("Apollo from ₹199: free delivery, fee named", q("Apollo", 216.5, "110001")["delivery_label"],
+              "FREE delivery · ₹7.08 platform fee + GST"),
+        check("Magicine small order points at the next slab", q("Magicine Pharma", 100, "110001")["delivery_label"],
+              "₹119 delivery · add ₹1,200 more to pay ₹99"),
         # Platform fee
         check("Truemeds ₹11 platform fee", q("Truemeds", 100, "110001")["total_landed_cost"], 160.0),
         # Always-free, pickup, unserviceable, unknown

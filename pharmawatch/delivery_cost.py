@@ -114,11 +114,23 @@ def resolve_platform_key(platform_name: str) -> Optional[str]:
     return None
 
 
+def _slab(slabs: List[dict], order_value: float) -> dict:
+    """The highest slab with min_order ≤ order value."""
+    applicable = [s for s in slabs if order_value >= float(s.get("min_order", 0))]
+    return max(applicable, key=lambda s: float(s.get("min_order", 0))) if applicable else slabs[0]
+
+
 def _slab_fee(slabs: List[dict], order_value: float) -> Tuple[float, Optional[str]]:
     """Fee (and condition, e.g. 'prepaid only') of the highest slab with min_order ≤ order value."""
-    applicable = [s for s in slabs if order_value >= float(s.get("min_order", 0))]
-    slab = max(applicable, key=lambda s: float(s.get("min_order", 0))) if applicable else slabs[0]
+    slab = _slab(slabs, order_value)
     return float(slab["fee"]), slab.get("condition")
+
+
+def _next_cheaper_slab(slabs: List[dict], order_value: float, fee: float) -> Optional[dict]:
+    """The first slab above this order value with a lower fee (Apollo: ₹93.22 below ₹199, ₹7.08 from ₹199)."""
+    above = sorted((s for s in slabs if float(s.get("min_order", 0)) > order_value),
+                   key=lambda s: float(s.get("min_order", 0)))
+    return next((s for s in above if float(s["fee"]) < fee), None)
 
 
 def _inr(amount: float) -> str:
@@ -214,9 +226,11 @@ def calculate_delivery_cost(
         })
         return quote
 
-    condition = None
+    condition, slab_label, next_slab = None, None, None
     if zone_cfg.get("order_value_slabs"):
         fee, condition = _slab_fee(zone_cfg["order_value_slabs"], order_value)
+        slab_label = _slab(zone_cfg["order_value_slabs"], order_value).get("label")
+        next_slab = _next_cheaper_slab(zone_cfg["order_value_slabs"], order_value, fee)
         always_free = _slab_fee(zone_cfg["order_value_slabs"], 0)[0] == 0
     elif zone_cfg.get("delivery_fee") is not None:
         fee = float(zone_cfg["delivery_fee"])
@@ -245,7 +259,7 @@ def calculate_delivery_cost(
             label = f"FREE delivery (order ≥ {_inr(threshold)})"
     else:
         approx = "~" if quote["fee_is_estimate"] else ""
-        label = f"{approx}{_inr(fee)} delivery"
+        label = slab_label or f"{approx}{_inr(fee)} delivery"
         if condition:
             label += f" ({condition})"
         if quote["fee_is_estimate"]:
@@ -254,7 +268,10 @@ def calculate_delivery_cost(
             gap = round(threshold - order_value, 2)
             quote["amount_to_free_delivery"] = gap
             label += f" · add {_inr(gap)} more for FREE delivery"
-        else:
+        elif next_slab is not None:
+            gap = round(float(next_slab["min_order"]) - order_value, 2)
+            label += f" · add {_inr(gap)} more to pay {_inr(float(next_slab['fee']))}"
+        elif not slab_label:  # a slab's own label already says what the fee is
             label += " · no free-delivery offer"
     if platform_fee:
         label += f" · +{_inr(platform_fee)} platform fee"
