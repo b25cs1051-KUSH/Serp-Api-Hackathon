@@ -8,7 +8,7 @@ export default function SiteHeader({ nav = true, tagline }: { nav?: boolean; tag
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 py-5">
       <Link href="/" className="flex items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-hit">
-        <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-hit to-sem text-sm font-black text-bg">P</div>
+        <div aria-hidden className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-hit to-sem text-sm font-black text-bg">P</div>
         <div>
           <div className="font-semibold leading-tight">PharmaWatch</div>
           {tagline && <div className="text-[11px] text-faint">{tagline}</div>}

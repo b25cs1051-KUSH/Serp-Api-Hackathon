@@ -81,7 +81,7 @@ function OfferCell({ offer, empty, highlight, badge }: { offer: Offer; empty: st
     <div className={highlight ? "rounded-md bg-hit/[0.07] px-2 py-1" : ""}>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`font-medium ${highlight ? "text-hit" : ""}`}>{offer.brand}</span>
-        {badge && <span className="rounded bg-hit/15 px-1.5 text-[10px] font-semibold text-hit">{badge}</span>}
+        {badge && <span className="rounded bg-hit px-1.5 text-[10px] font-semibold text-bg">{badge}</span>}
       </div>
       <div className="tnum text-[11px] text-muted">
         {offer.platform} · {inr(offer.item_cost)} · {offer.pack_estimated ? "~" : ""}

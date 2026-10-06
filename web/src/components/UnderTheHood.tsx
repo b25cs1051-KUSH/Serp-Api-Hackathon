@@ -104,7 +104,7 @@ export default function UnderTheHood({ state, note }: { state: SearchState; note
         <div className="mb-2 flex items-center gap-1 text-[11px] text-faint">
           <Zap className="h-3 w-3" /> call log
         </div>
-        <div className="max-h-[360px] space-y-1.5 overflow-y-auto pr-1">
+        <div tabIndex={0} aria-label="Call log" className="max-h-[360px] space-y-1.5 overflow-y-auto pr-1 focus-visible:outline-2 focus-visible:outline-hit">
           {calls.map((c) => (
             <div key={c.n} className="rise flex items-start gap-3 rounded-lg border border-line bg-panel-2 px-3 py-2">
               <span className="tnum mt-0.5 w-5 shrink-0 text-right font-mono text-[11px] text-faint">{c.n}</span>

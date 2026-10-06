@@ -121,7 +121,7 @@ export default function DemoPanel() {
             <span className="font-mono">SerpApi calls</span>
             {running && <span className="flex items-center gap-1.5 text-hit"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-hit" /> live</span>}
           </div>
-          <ol className="mt-3 max-h-[420px] space-y-1 overflow-y-auto pr-1 font-mono text-xs" aria-live="polite">
+          <ol tabIndex={0} aria-label="SerpApi calls" className="mt-3 max-h-[420px] space-y-1 overflow-y-auto pr-1 font-mono text-xs focus-visible:outline-2 focus-visible:outline-hit" aria-live="polite">
             {calls.map((c) => (
               <li key={c.n} className="rise flex items-start gap-2 rounded-md bg-panel-2 px-2.5 py-1.5">
                 <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${KIND[c.kind].cls}`}>

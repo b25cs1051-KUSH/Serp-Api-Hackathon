@@ -33,7 +33,7 @@ export default function CacheExplorer({ data, onRefresh }: { data: CacheEntries 
       {data && !data.redis_ok ? (
         <p className="text-sm text-bad">Redis is down: the cache is in passthrough mode.</p>
       ) : (
-        <div className="max-h-80 overflow-auto">
+        <div tabIndex={0} aria-label="Cached entries" className="max-h-80 overflow-auto focus-visible:outline-2 focus-visible:outline-hit">
           <table className="w-full table-fixed text-xs">
             <thead className="sticky top-0 bg-panel">
               <tr className="border-b border-line text-left text-[10px] uppercase tracking-wider text-faint">

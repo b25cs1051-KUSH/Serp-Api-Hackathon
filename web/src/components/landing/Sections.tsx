@@ -140,12 +140,12 @@ export function ForDevelopers() {
           <p className="mt-1 text-sm text-muted">
             Add to <code className="font-mono text-xs">claude_desktop_config.json</code>, then ask &ldquo;Where is Stamlo 5 cheapest delivered to 110001?&rdquo;
           </p>
-          <pre className="theme-console mt-3 overflow-x-auto rounded-lg p-4 font-mono text-xs leading-relaxed">{MCP_CONFIG}</pre>
+          <pre tabIndex={0} aria-label="claude_desktop_config.json" className="theme-console mt-3 overflow-x-auto rounded-lg p-4 font-mono text-xs leading-relaxed focus-visible:outline-2 focus-visible:outline-hit">{MCP_CONFIG}</pre>
         </div>
         <div className="min-w-0 space-y-4">
           <div className="rounded-xl border border-line bg-panel p-5">
             <h3 className="font-semibold">Run it locally</h3>
-            <pre className="theme-console mt-3 overflow-x-auto rounded-lg p-4 font-mono text-xs">docker compose up --build</pre>
+            <pre tabIndex={0} aria-label="Command" className="theme-console mt-3 overflow-x-auto rounded-lg p-4 font-mono text-xs focus-visible:outline-2 focus-visible:outline-hit">docker compose up --build</pre>
             <p className="mt-2 text-xs text-muted">UI on :3000, API on :8000, Redis on :6379. Needs a SerpApi key in .env.</p>
           </div>
           <div className="flex flex-wrap gap-2">

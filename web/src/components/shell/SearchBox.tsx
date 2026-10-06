@@ -38,7 +38,7 @@ export function PinInput({ value, onChange, id = "pin", className = "" }: { valu
         onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
         inputMode="numeric"
         placeholder="PIN"
-        className="tnum w-full rounded-lg border border-line bg-bg py-3 pl-9 pr-3 font-mono text-sm outline-none focus:border-hit/50"
+        className="tnum w-full rounded-lg border border-line bg-bg py-3 pl-9 pr-3 font-mono text-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit focus:border-hit/50"
       />
     </div>
   );
@@ -76,7 +76,7 @@ export default function SearchBox({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Medicine name, e.g. Dolo 650"
-          className="w-full rounded-lg bg-transparent py-3 pl-10 pr-3 text-base outline-none placeholder:text-faint"
+          className="w-full rounded-lg bg-transparent py-3 pl-10 pr-3 text-base outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit placeholder:text-faint"
         />
       </div>
       <PinInput value={pincode} onChange={setPincode} className="md:w-36" />

@@ -15,7 +15,7 @@ export default function AddToCart({ name, inCart, onAdd, id }: { name: string; i
         onChange={(e) => setTablets(e.target.value.replace(/\D/g, "").slice(0, 3))}
         inputMode="numeric"
         placeholder="1 pack"
-        className="tnum w-20 rounded-lg border border-line bg-panel px-2.5 py-2 font-mono text-sm outline-none placeholder:text-faint focus:border-accent"
+        className="tnum w-20 rounded-lg border border-line bg-panel px-2.5 py-2 font-mono text-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit placeholder:text-faint focus:border-accent"
       />
       <button
         type="button"

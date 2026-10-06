@@ -8,7 +8,7 @@
   --color-line: #1d2530;
   --color-ink: #e6edf3;
   --color-muted: #8b98a8;
-  --color-faint: #5b6776;
+  --color-faint: #7a8796;
   --color-hit: #34d399;
   --color-sem: #60a5fa;
   --color-miss: #fbbf24;
@@ -22,10 +22,10 @@
   --color-subtle: #5f6670;
   --color-rule: #e5e6e3;
   --color-accent: #0d6e6e;
-  --color-save: #0b8a63;
+  --color-save: #056b4b;
   --color-mint: #d9f2e7;
-  --color-warn: #b8640a;
-  --color-error: #c2413b;
+  --color-warn: #9a5208;
+  --color-error: #a8332e;
   --color-console: #0f1417;
 }
 
@@ -43,11 +43,11 @@
   --color-line: #e5e6e3;
   --color-ink: #111418;
   --color-muted: #5f6670;
-  --color-faint: #6b7079;
-  --color-hit: #0b8a63;
+  --color-faint: #646a73;
+  --color-hit: #056b4b;
   --color-sem: #1f5fa8;
-  --color-miss: #b8640a;
-  --color-bad: #c2413b;
+  --color-miss: #9a5208;
+  --color-bad: #a8332e;
   --color-llm: #6d3fc0;
   background: var(--color-bg);
   color: var(--color-ink);
@@ -66,7 +66,7 @@
   --color-hit: #34d399;
   --color-sem: #60a5fa;
   --color-miss: #fbbf24;
-  --color-bad: #fb7185;
+  --color-bad: #ff8fa0;
   --color-llm: #c084fc;
   background: var(--color-bg);
   color: var(--color-ink);
