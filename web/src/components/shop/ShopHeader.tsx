@@ -1,97 +1,71 @@
 "use client";
 
-import { Loader2, MapPin, Search, ShoppingCart } from "lucide-react";
+import { ClipboardList, MapPin, Pill } from "lucide-react";
 import Link from "next/link";
+
+export type ShopTab = "one" | "rx";
 
 const ZONE: Record<string, string> = { metro: "Metro", tier2: "Tier 2", tier3: "Tier 3", remote: "Remote", unserviceable: "No delivery" };
 
-/** Shop header: logo (home), the medicine search, the delivery PIN (with its zone once known) and the cart. */
+/** Shop header: logo (home), One medicine / Whole prescription, and the delivery PIN (with its zone once known). */
 export default function ShopHeader({
-  query,
-  setQuery,
+  tab,
+  onTab,
   pincode,
   setPincode,
   zone,
-  running,
-  onSearch,
-  cartCount,
-  onCart,
+  onEnter,
 }: {
-  query: string;
-  setQuery: (q: string) => void;
+  tab: ShopTab;
+  onTab: (t: ShopTab) => void;
   pincode: string;
   setPincode: (p: string) => void;
   zone?: string;
-  running: boolean;
-  onSearch: () => void;
-  cartCount: number;
-  onCart: () => void;
+  onEnter: () => void;
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-4 py-3 sm:flex-nowrap sm:gap-3 sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-4 py-3 sm:flex-nowrap sm:gap-4 sm:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-accent">
           <span aria-hidden className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-sm font-black text-white">P</span>
           <span className="sr-only font-semibold sm:not-sr-only">PharmaWatch</span>
         </Link>
 
-        <form
-          role="search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSearch();
-          }}
-          className="order-3 flex w-full min-w-0 items-center gap-2 sm:order-none sm:flex-1"
-        >
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
-            <label className="sr-only" htmlFor="q">Medicine name</label>
-            <input
-              id="q"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search a medicine, e.g. Dolo 650"
-              className="w-full rounded-lg border border-line bg-panel py-2.5 pl-9 pr-3 text-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit placeholder:text-faint focus:border-accent"
-            />
-          </div>
-          <button
-            disabled={running || !query.trim() || pincode.length !== 6}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
-          >
-            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            <span className="sr-only sm:not-sr-only">Search</span>
-          </button>
-        </form>
+        <div role="tablist" aria-label="What to search" className="order-3 flex w-full rounded-xl border border-line bg-panel-2 p-1 text-sm sm:order-none sm:w-auto">
+          {([
+            ["one", "One medicine", Pill],
+            ["rx", "Whole prescription", ClipboardList],
+          ] as const).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              id={`tab-${id}`}
+              aria-selected={tab === id}
+              aria-controls={`panel-${id}`}
+              onClick={() => onTab(id)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-accent sm:flex-none ${
+                tab === id ? "bg-accent text-white" : "text-muted hover:text-ink"
+              }`}
+            >
+              <Icon aria-hidden className="h-4 w-4" /> {label}
+            </button>
+          ))}
+        </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0">
-          <div className="relative">
-            <MapPin className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
-            <label className="sr-only" htmlFor="pin">Delivery PIN code</label>
-            <input
-              id="pin"
-              value={pincode}
-              onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              onKeyDown={(e) => e.key === "Enter" && onSearch()}
-              inputMode="numeric"
-              placeholder="PIN"
-              className={`tnum rounded-lg border border-line bg-panel py-2.5 pl-8 pr-2 font-mono text-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit focus:border-accent ${zone ? "w-40" : "w-28"}`}
-            />
-            {zone && <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted">· {ZONE[zone] ?? zone}</span>}
-          </div>
-          <button
-            type="button"
-            onClick={onCart}
-            className="relative flex items-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-2.5 text-sm font-medium hover:border-accent/50 focus-visible:outline-2 focus-visible:outline-accent"
-          >
-            <ShoppingCart aria-hidden className="h-4 w-4" />
-            <span className="sr-only sm:not-sr-only">Cart</span>
-            {cartCount > 0 && (
-              <span className="tnum grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[11px] font-semibold text-white">
-                {cartCount}
-                <span className="sr-only"> medicine{cartCount === 1 ? "" : "s"}</span>
-              </span>
-            )}
-          </button>
+        <div className="relative ml-auto shrink-0">
+          <MapPin aria-hidden className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
+          <label className="sr-only" htmlFor="pin">Delivery PIN code</label>
+          <input
+            id="pin"
+            value={pincode}
+            onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            onKeyDown={(e) => e.key === "Enter" && onEnter()}
+            inputMode="numeric"
+            placeholder="PIN"
+            className={`tnum rounded-lg border border-line bg-panel py-2.5 pl-8 pr-2 font-mono text-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit focus:border-accent ${zone ? "w-40" : "w-28"}`}
+          />
+          {zone && <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted">· {ZONE[zone] ?? zone}</span>}
         </div>
       </div>
     </header>

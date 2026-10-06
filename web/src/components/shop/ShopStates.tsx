@@ -47,7 +47,7 @@ export function EmptyState({ examples, onSearch, onPaste }: { examples: string[]
   return (
     <section className="py-10">
       <h1 className="max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">The lowest price for your medicines, delivered to your PIN.</h1>
-      <p className="mt-2 max-w-xl text-sm text-muted">Search one medicine, or put your whole prescription in the cart and we&apos;ll find the cheapest way to buy it.</p>
+      <p className="mt-2 max-w-xl text-sm text-muted">Search one medicine, or switch to Whole prescription and we&apos;ll find the cheapest way to buy all of it.</p>
       <div className="mt-5 flex flex-wrap items-center gap-2">
         {examples.map((e) => (
           <button

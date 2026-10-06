@@ -34,7 +34,7 @@ export function Hero({ aside }: { aside?: React.ReactNode }) {
         <p className="mt-5 max-w-xl text-base text-muted">{HERO.sentence}</p>
         <div className="mt-7 flex flex-wrap gap-3">
           <Link
-            href="/shop"
+            href="/shop?tab=rx"
             className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-white hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             Try a prescription <ArrowRight className="h-4 w-4" />

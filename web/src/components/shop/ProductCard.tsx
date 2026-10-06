@@ -2,7 +2,6 @@
 
 import { ExternalLink, Info, Truck } from "lucide-react";
 import { buyLink, inr, isProductLink, type Alternative, type Listing } from "@/lib/api";
-import AddToCart from "./AddToCart";
 
 const STATUS_TEXT: Record<Listing["delivery_status"], string> = {
   free: "text-hit",
@@ -31,21 +30,17 @@ export function BuyLink({ l, pending, label }: { l: Listing; pending?: boolean; 
   );
 }
 
-/** One product: its best delivered offer, the other pharmacies as chips, and Add to cart. */
+/** One product: its best delivered offer, its Buy link and the other pharmacies as chips. */
 export default function ProductCard({
   name,
   listings,
   reference,
   pending,
-  inCart,
-  onAdd,
 }: {
   name: string;
   listings: Listing[];
   reference: Alternative | null | undefined;
   pending: (l: Listing) => boolean;
-  inCart: boolean;
-  onAdd: (tablets: number | null) => void;
 }) {
   const best = listings.find(delivered) ?? listings[0];
   if (!best) return null;
@@ -94,8 +89,7 @@ export default function ProductCard({
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <AddToCart id={`add-${name}`} name={name} inCart={inCart} onAdd={onAdd} />
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
         <BuyLink l={best} pending={pending(best)} label={isProductLink(best) ? `Buy at ${best.platform}` : undefined} />
       </div>
 

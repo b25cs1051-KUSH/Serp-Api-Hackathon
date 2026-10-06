@@ -2,7 +2,6 @@
 
 import { BadgeCheck, ShieldCheck, Store } from "lucide-react";
 import { inr, type Alternative, type AltResult } from "@/lib/api";
-import AddToCart from "./AddToCart";
 import { BuyLink } from "./ProductCard";
 
 const CAUTION = "Same salt, strength and form. Ask your doctor or pharmacist before switching brands.";
@@ -10,8 +9,8 @@ const CAUTION = "Same salt, strength and form. Ask your doctor or pharmacist bef
 const perUnit = (a: Alternative) =>
   a.unit_landed_cost != null ? `${a.pack_estimated ? "~" : ""}${inr(a.unit_landed_cost)} per tablet` : `${inr(a.total_landed_cost)} delivered`;
 
-/** "Same salt, same strength: X at ₹y per tablet. Save N%", with its own Add to cart and the caution. */
-function SwapStrip({ a, inCart, onAdd }: { a: Alternative; inCart: boolean; onAdd: (tablets: number | null) => void }) {
+/** "Same salt, same strength: X at ₹y per tablet. Save N%", with its Buy link and the caution. */
+function SwapStrip({ a }: { a: Alternative }) {
   return (
     <li className="rise rounded-xl border border-hit/30 bg-hit/[0.06] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -40,8 +39,7 @@ function SwapStrip({ a, inCart, onAdd }: { a: Alternative; inCart: boolean; onAd
           </p>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <AddToCart id={`add-swap-${a.brand}`} name={a.brand} inCart={inCart} onAdd={onAdd} />
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
         <BuyLink l={a} />
       </div>
       <p className="mt-2 text-[11px] text-muted">{CAUTION}</p>
@@ -54,14 +52,10 @@ export default function SwapSection({
   result,
   running,
   only,
-  hasInCart,
-  onAdd,
 }: {
   result: AltResult | null | undefined;
   running: boolean;
   only: (a: Alternative) => boolean;
-  hasInCart: (name: string) => boolean;
-  onAdd: (name: string, tablets: number | null) => void;
 }) {
   if (result === undefined) return running ? <div className="h-28 rounded-xl shimmer" aria-label="Looking for cheaper brands" /> : null;
   if (result === null) {
@@ -103,7 +97,7 @@ export default function SwapSection({
       {cheaper.length > 0 ? (
         <ul className="space-y-2">
           {cheaper.map((a) => (
-            <SwapStrip key={`c-${a.brand}`} a={a} inCart={hasInCart(a.brand)} onAdd={(t) => onAdd(a.brand, t)} />
+            <SwapStrip key={`c-${a.brand}`} a={a} />
           ))}
         </ul>
       ) : (
@@ -123,7 +117,6 @@ export default function SwapSection({
                   </span>
                 </span>
                 <span className="flex items-center gap-2">
-                  <AddToCart id={`add-other-${a.brand}`} name={a.brand} inCart={hasInCart(a.brand)} onAdd={(t) => onAdd(a.brand, t)} />
                   <BuyLink l={a} />
                 </span>
               </li>

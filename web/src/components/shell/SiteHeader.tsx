@@ -16,7 +16,7 @@ export default function SiteHeader({ nav = true, tagline }: { nav?: boolean; tag
       </Link>
       {nav && (
         <nav aria-label="Site" className="flex flex-wrap items-center gap-1 text-sm">
-          <Link href="/shop" className="rounded-lg px-3 py-1.5 font-medium text-muted hover:text-ink">Try a prescription</Link>
+          <Link href="/shop?tab=rx" className="rounded-lg px-3 py-1.5 font-medium text-muted hover:text-ink">Try a prescription</Link>
           <Link href="/engine" className="rounded-lg px-3 py-1.5 font-medium text-muted hover:text-ink">Under the hood</Link>
           <a href={DOCS_URL} target="_blank" rel="noopener noreferrer" className="rounded-lg px-3 py-1.5 text-muted hover:text-ink">Docs</a>
           <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="rounded-lg px-3 py-1.5 text-muted hover:text-ink">GitHub</a>

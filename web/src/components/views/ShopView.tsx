@@ -1,31 +1,36 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { Loader2, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import ChooseCard from "@/components/ChooseCard";
+import PrescriptionForm, { RX_EXAMPLE } from "@/components/PrescriptionForm";
 import SiteFooter from "@/components/shell/SiteFooter";
-import CartPanel from "@/components/shop/CartPanel";
 import ProductCard, { delivered } from "@/components/shop/ProductCard";
 import Receipt from "@/components/shop/Receipt";
-import ShopHeader from "@/components/shop/ShopHeader";
+import ShopHeader, { type ShopTab } from "@/components/shop/ShopHeader";
 import { EmptyState, ErrorNote, FilterChips, LoadingCards, deliveryHours, type Filter } from "@/components/shop/ShopStates";
 import SwapSection from "@/components/shop/SwapSection";
 import type { Listing, RxItem } from "@/lib/api";
-import { useCart } from "@/lib/useCart";
 import { usePrescription } from "@/lib/usePrescription";
 import { useSearch } from "@/lib/useSearch";
 
 /** Medicines cached on the price engine at the time of writing (0 credits to search). */
 const EXAMPLES = ["Atorbest 10", "Stamlo 5", "Dolo 650", "Telma 40", "Pan 40"];
 
-/** The shop: what a buyer sees. No calls, credits, timings or cache here. */
+/** The shop: one medicine or a whole prescription, priced delivered to the PIN. No calls, credits or cache here. */
 export default function ShopView() {
+  const [tab, setTab] = useState<ShopTab>("one");
   const [query, setQuery] = useState("");
   const [pincode, setPincode] = useState("110001");
-  const [view, setView] = useState<"search" | "receipt">("search");
-  const [cartOpen, setCartOpen] = useState(false);
-  const closeCart = useCallback(() => setCartOpen(false), []);
   const [filter, setFilter] = useState<Filter>("cheapest");
-  const cart = useCart();
+  const [rxItems, setRxItems] = useState<RxItem[]>(RX_EXAMPLE);
+
+  // /shop?tab=rx opens the prescription tab (read after mount so the static page stays the same for everyone).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") !== "rx") return;
+    const t = setTimeout(() => setTab("rx"), 0);
+    return () => clearTimeout(t);
+  }, []);
 
   // One-medicine searches resolve the top listings' product pages; prescriptions don't (as before the redesign).
   const { state, run } = useSearch();
@@ -37,21 +42,18 @@ export default function ShopView() {
     const text = q.trim();
     if (!text || running || pincode.length !== 6) return;
     setQuery(text);
-    setView("search");
+    setTab("one");
     setFilter("cheapest");
     run(text, pincode, true);
   };
-  const submitRx = (items: RxItem[] = cart.items) => {
+  const submitRx = (items: RxItem[] = rxItems) => {
     const clean = items.map((it) => ({ q: it.q.trim().replace(/\s+/g, " "), tablets: it.tablets })).filter((it) => it.q.length >= 2);
     if (!clean.length || rxRunning || pincode.length !== 6) return;
-    setCartOpen(false);
-    setView("receipt");
-    window.scrollTo({ top: 0 });
     rx.run(clean, pincode, false);
   };
   const pickRx = (line: number, q: string) => {
     const items = rx.state.items.map((it, i) => (i === line ? { ...it, q } : it));
-    cart.set(items);
+    setRxItems(items);
     rx.run(items, rx.state.pincode, false);
   };
 
@@ -63,91 +65,103 @@ export default function ShopView() {
     filter === "free"
       ? listings.filter((l) => l.delivery_status === "free")
       : filter === "fastest"
-        ? [...listings.filter(delivered)].sort((a, b) => deliveryHours(a.estimated_days) - deliveryHours(b.estimated_days) || (a.total_landed_cost ?? 0) - (b.total_landed_cost ?? 0)).concat(listings.filter((l) => !delivered(l)))
+        ? [...listings.filter(delivered)]
+            .sort((a, b) => deliveryHours(a.estimated_days) - deliveryHours(b.estimated_days) || (a.total_landed_cost ?? 0) - (b.total_landed_cost ?? 0))
+            .concat(listings.filter((l) => !delivered(l)))
         : listings;
 
   return (
     <div className="theme-light min-h-screen w-full">
-      <ShopHeader
-        query={query}
-        setQuery={setQuery}
-        pincode={pincode}
-        setPincode={setPincode}
-        zone={zone}
-        running={running}
-        onSearch={() => search()}
-        cartCount={cart.count}
-        onCart={() => setCartOpen(true)}
-      />
+      <ShopHeader tab={tab} onTab={setTab} pincode={pincode} setPincode={setPincode} zone={zone} onEnter={() => (tab === "one" ? search() : submitRx())} />
 
       <main className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">
-        {view === "receipt" && rx.state.status !== "idle" ? (
-          <Receipt rx={rx.state} onPick={pickRx} onEdit={() => setCartOpen(true)} onBack={state.status !== "idle" ? () => setView("search") : undefined} />
-        ) : state.status === "idle" ? (
-          <EmptyState examples={EXAMPLES} onSearch={search} onPaste={() => setCartOpen(true)} />
-        ) : (
-          <section className="space-y-5 py-6">
-            {state.error && <ErrorNote message={state.error} />}
-            {state.choose ? (
-              <ChooseCard choose={state.choose} onPick={search} />
+        {tab === "one" ? (
+          <div id="panel-one" role="tabpanel" aria-labelledby="tab-one" className="py-6">
+            <form
+              role="search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                search();
+              }}
+              className="flex gap-2"
+            >
+              <div className="relative min-w-0 flex-1">
+                <Search aria-hidden className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
+                <label className="sr-only" htmlFor="q">Medicine name</label>
+                <input
+                  id="q"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search a medicine, e.g. Dolo 650"
+                  className="w-full rounded-lg border border-line bg-panel py-3 pl-9 pr-3 text-base outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit placeholder:text-faint focus:border-accent"
+                />
+              </div>
+              <button
+                disabled={running || !query.trim() || pincode.length !== 6}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-white hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+              >
+                {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search aria-hidden className="h-4 w-4" />}
+                Search
+              </button>
+            </form>
+
+            {state.status === "idle" ? (
+              <EmptyState examples={EXAMPLES} onSearch={search} onPaste={() => setTab("rx")} />
             ) : (
-              <>
-                {state.alternatives && state.alternatives.matched_by !== "exact" && (
-                  <p className="text-sm text-muted">
-                    Showing results for <span className="font-medium text-ink">{state.alternatives.matched_brand ?? state.alternatives.composition.name}</span> (you typed
-                    &ldquo;{state.query}&rdquo;).
-                  </p>
-                )}
-                {state.listings === null ? (
-                  state.status === "running" && <LoadingCards />
-                ) : listings.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
-                    No listing is exactly {state.query}. Look-alike products were left out on purpose.
-                  </p>
+              <section className="mt-6 space-y-5">
+                {state.error && <ErrorNote message={state.error} />}
+                {state.choose ? (
+                  <ChooseCard choose={state.choose} onPick={search} />
                 ) : (
                   <>
-                    <FilterChips value={filter} onChange={setFilter} />
-                    {filter !== "swaps" &&
-                      (shown.length ? (
-                        <ProductCard
-                          name={name}
-                          listings={shown}
-                          reference={state.alternatives?.reference}
-                          pending={pending}
-                          inCart={cart.has(name)}
-                          onAdd={(t) => cart.add(name, t)}
-                        />
-                      ) : (
-                        <p className="rounded-xl border border-dashed border-line p-5 text-sm text-muted">
-                          No pharmacy delivers {name} free to {state.pincode}. Cheapest delivered is shown under &ldquo;Cheapest delivered&rdquo;.
-                        </p>
-                      ))}
+                    {state.alternatives && state.alternatives.matched_by !== "exact" && (
+                      <p className="text-sm text-muted">
+                        Showing results for <span className="font-medium text-ink">{state.alternatives.matched_brand ?? state.alternatives.composition.name}</span> (you
+                        typed &ldquo;{state.query}&rdquo;).
+                      </p>
+                    )}
+                    {state.listings === null ? (
+                      state.status === "running" && <LoadingCards />
+                    ) : listings.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
+                        No listing is exactly {state.query}. Look-alike products were left out on purpose.
+                      </p>
+                    ) : (
+                      <>
+                        <FilterChips value={filter} onChange={setFilter} />
+                        {filter !== "swaps" &&
+                          (shown.length ? (
+                            <ProductCard name={name} listings={shown} reference={state.alternatives?.reference} pending={pending} />
+                          ) : (
+                            <p className="rounded-xl border border-dashed border-line p-5 text-sm text-muted">
+                              No pharmacy delivers {name} free to {state.pincode}. Cheapest delivered is shown under &ldquo;Cheapest delivered&rdquo;.
+                            </p>
+                          ))}
+                      </>
+                    )}
+                    <SwapSection result={state.alternatives} running={running} only={(a) => filter !== "free" || a.delivery_status === "free"} />
                   </>
                 )}
-                <SwapSection
-                  result={state.alternatives}
-                  running={running}
-                  only={(a) => filter !== "free" || a.delivery_status === "free"}
-                  hasInCart={cart.has}
-                  onAdd={cart.add}
-                />
-              </>
+              </section>
             )}
-          </section>
+          </div>
+        ) : (
+          <div id="panel-rx" role="tabpanel" aria-labelledby="tab-rx" className="py-6">
+            <h1 className="text-2xl font-semibold tracking-tight">Your whole prescription</h1>
+            <p className="mt-1 text-sm text-muted">
+              Type or paste your medicines (one per line, e.g. &ldquo;Dolo 650 x30&rdquo;), or start from a common prescription. We find the cheapest way to buy
+              all of them, delivery included.
+            </p>
+            <PrescriptionForm items={rxItems} setItems={setRxItems} pincode={pincode} setPincode={setPincode} running={rxRunning} onSubmit={() => submitRx()} />
+            {rx.state.status !== "idle" && (
+              <div className="mt-8">
+                <Receipt rx={rx.state} onPick={pickRx} />
+              </div>
+            )}
+          </div>
         )}
         <SiteFooter />
       </main>
-
-      <CartPanel
-        open={cartOpen}
-        onClose={closeCart}
-        items={cart.items}
-        setItems={cart.set}
-        pincode={pincode}
-        setPincode={setPincode}
-        running={rxRunning}
-        onFind={() => submitRx()}
-      />
     </div>
   );
 }
