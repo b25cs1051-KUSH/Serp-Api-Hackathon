@@ -1,20 +1,94 @@
 @import "tailwindcss";
 
-@theme inline {
+/* Colours are referenced through var() (not inlined) so a scope like .theme-light can remap them. */
+@theme {
   --color-bg: #07090d;
   --color-panel: #0d1117;
   --color-panel-2: #121821;
   --color-line: #1d2530;
   --color-ink: #e6edf3;
   --color-muted: #8b98a8;
-  --color-faint: #5b6776;
+  --color-faint: #7a8796;
   --color-hit: #34d399;
   --color-sem: #60a5fa;
   --color-miss: #fbbf24;
   --color-bad: #fb7185;
   --color-llm: #c084fc;
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "Cascadia Code", monospace;
+
+  /* Light design system. Semantic colours mean the same everywhere: save = free or saving,
+     warn = costs a credit or a fee, error = blocked or unavailable. */
+  --color-ground: #fbfbf9;
+  --color-text: #111418;
+  --color-subtle: #5f6670;
+  --color-rule: #e5e6e3;
+  --color-accent: #0d6e6e;
+  --color-save: #056b4b;
+  --color-mint: #d9f2e7;
+  --color-warn: #9a5208;
+  --color-error: #a8332e;
+  --color-console: #0f1417;
+}
+
+@theme inline {
+  --font-sans: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, "Cascadia Code", monospace;
+}
+
+/* Light pages: the dark tokens remapped, so shared components render light inside this scope. */
+.theme-light {
+  color-scheme: light;
+  /* A tinted ground with white surfaces on it: every section reads as its own panel. */
+  --color-bg: #e9f0ed;
+  --color-panel: #ffffff;
+  --color-panel-2: #f2f7f5;
+  --color-line: #c9d6d1;
+  --color-ink: #0e1a17;
+  --color-muted: #44524d;
+  --color-faint: #56645f;
+  --color-hit: #056b4b;
+  --color-sem: #1f5fa8;
+  --color-miss: #9a5208;
+  --color-bad: #a8332e;
+  --color-llm: #6d3fc0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+/* Surfaces on the light pages: a white panel with a firm edge and a soft lift. */
+.theme-light .card,
+.theme-light .surface {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(14, 40, 33, 0.06), 0 6px 20px -14px rgba(14, 40, 33, 0.35);
+}
+
+.theme-light .shimmer {
+  background: linear-gradient(90deg, #dfe8e4 0, #eef4f1 50%, #dfe8e4 100%);
+  background-size: 400px 100%;
+}
+
+/* The engine's console surface, dark inside any page. */
+.theme-console {
+  color-scheme: dark;
+  --color-bg: #0f1417;
+  --color-panel: #141b1f;
+  --color-panel-2: #1a2227;
+  --color-line: #263037;
+  --color-ink: #e6edf3;
+  --color-muted: #9aa7b4;
+  --color-faint: #7c8995;
+  --color-hit: #34d399;
+  --color-sem: #60a5fa;
+  --color-miss: #fbbf24;
+  --color-bad: #ff8fa0;
+  --color-llm: #c084fc;
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
 :root {

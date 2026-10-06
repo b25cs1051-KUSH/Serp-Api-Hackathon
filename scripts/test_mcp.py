@@ -85,7 +85,18 @@ async def part1_in_memory():
     try:
         async with Client(mcp_server.mcp) as client:
             tools = {t.name: t for t in (await client.list_tools()).tools}
-            check("tools", sorted(tools), ["cache_lab", "cache_stats", "plan_prescription", "search_medicine"])
+            check("tools", sorted(tools), ["cache_lab", "cache_stats", "get_buy_link", "plan_prescription", "search_medicine"])
+            check("every tool publishes an outputSchema", all(t.output_schema for t in tools.values()), True)
+            check("no $ref left in any schema (clients that drop $defs)",
+                  any("$ref" in json.dumps([t.input_schema, t.output_schema]) for t in tools.values()), False)
+            check("prescription items show name + tablets",
+                  sorted(tools["plan_prescription"].input_schema["properties"]["medicines"]["items"]["properties"]),
+                  ["name", "tablets"])
+            check("buy link tool is open-world, not destructive",
+                  (tools["get_buy_link"].annotations.open_world_hint, tools["get_buy_link"].annotations.destructive_hint),
+                  (True, False))
+            prompts = sorted(p.name for p in (await client.list_prompts()).prompts)
+            check("prompts", prompts, ["compare_medicine", "plan_my_prescription"])
             rx = tools["plan_prescription"]
             check("prescription tool: medicines + pincode required", sorted(rx.input_schema.get("required", [])),
                   ["medicines", "pincode"])
@@ -112,21 +123,29 @@ async def part1_in_memory():
             check("markdown heading", md.startswith("## Stamlo 5: delivered prices to PIN 110001"), True)
             check("cheapest line", "Cheapest delivered: **₹66.02** at Chemist180" in md, True)
             check("generic row", "| Amlokind 5 | — | Chemist180 | ₹19.41 | ₹1.94 | ~10 (est.) | ≈70.6% (₹4.66/tablet) |" in md, True)
-            check("not found listed", "Searched, but not sold online here right now: Amtas 5." in md, True)
+            check("not found listed", "Not deliverable here right now: Amtas 5." in md, True)
+            sc = r.structured_content
+            check("structured: listing with an id for get_buy_link", (len(sc["listings"]), bool(sc["listings"][0]["listing_id"])), (1, True))
+            check("structured: store search link typed", sc["listings"][0]["link_type"], "store_search")
+            check("structured: cheaper generic", (sc["cheaper_generics"][0]["brand"], sc["cheaper_generics"][0]["saving_pct"]),
+                  ("Amlokind 5", 70.6))
+            check("structured: caution included", "doctor or pharmacist" in sc["caution"], True)
+            check("markdown shows the id to resolve", f"id `{sc['listings'][0]['listing_id']}`" in md, True)
             check("run line", "3 SerpApi lookups · 1 credit spent · 2 served from cache (1 exact, 1 semantic)" in md, True)
             check("no page tokens leak", "tok-123" in md, False)
             check("resolve_links passed as False", calls_made[-1], ("Stamlo 5", "110001", False))
             check("progress reported", len(progress) >= 4, True)
             check("progress increases", [p for p, _ in progress] == sorted(p for p, _ in progress), True)
-            check("progress names stages", any("Generic alternatives ready" == m for _, m in progress), True)
+            check("progress names stages", any("Same-salt brands compared" == m for _, m in progress), True)
 
             r = await client.call_tool("search_medicine", {"query": "Stamlo 5", "pincode": "110001",
                                                            "response_format": "json"})
             data = json.loads(text(r))
             check("json listings", len(data["listings"]), 1)
+            check("json text = structuredContent", data, r.structured_content)
             check("json link, no token", ("link" in data["listings"][0], "page_token" in data["listings"][0]), (True, False))
-            check("json cheaper", data["alternatives"]["cheaper_alternatives"][0]["savings_pct"], 70.6)
-            check("json summary credits", data["summary"]["credits_spent"], 1)
+            check("json cheaper", data["cheaper_generics"][0]["saving_pct"], 70.6)
+            check("json summary credits", data["run"]["credits_spent"], 1)
 
             n = len(calls_made)
             r = await client.call_tool("search_medicine", {"query": "Stamlo 5", "pincode": "12345"})
@@ -171,8 +190,8 @@ async def part1_in_memory():
                                                                   "pincode": "110001"})
             finally:
                 api.prescription_stream = real_rx
-            md = text(r)
-            check("prescription: basket in markdown", (r.is_error, "**Cheapest basket: ₹41.82**" in md,
+            md, rx_sc = text(r), r.structured_content
+            check("prescription: basket in markdown", (r.is_error, "Cheapest overall (same-salt swaps, any pharmacies): ₹41.82**" in md,
                                                        "| Chemist180 | Dolo 650 | Paracip 650 (same-salt swap) | 3 × ~10 |" in md),
                   (False, True, True))
             check("prescription: asks for the missing strength", "**Which paracetamol?**" in md and "`Paracetamol 650mg`" in md, True)
@@ -182,6 +201,69 @@ async def part1_in_memory():
             r = await client.call_tool("search_medicine", {"query": "paracetamol", "pincode": "110001"})
             check("needs a strength: options, not an error", (r.is_error, text(r).startswith("## Which paracetamol?"),
                                                              "`Paracetamol 650mg`" in text(r)), (False, True, True))
+
+            sc = rx_sc or {}
+            check("prescription structured: plans", [p["plan"] for p in sc.get("plans", [])],
+                  ["cheapest_with_swaps", "one_pharmacy"])
+            check("prescription structured: needs a strength", [n["medicine"] for n in sc.get("needs_strength", [])],
+                  ["paracetamol"])
+            item = sc["plans"][0]["orders"][0]["items"][0]
+            check("prescription structured: swap item with id", (item["buy"], item["is_swap"], bool(item["listing_id"])),
+                  ("Paracip 650", True, True))
+
+            # get_buy_link: the web app's click-to-resolve, with the SerpApi product-page call stubbed
+            api.search_medicine_stream = stub_pipeline()
+            r = await client.call_tool("search_medicine", {"query": "Stamlo 5", "pincode": "110001"})
+            lid = r.structured_content["listings"][0]["listing_id"]
+            real_fetch = api._fetch_direct_link
+            seen = []
+
+            def fetch_ok(row):
+                seen.append(row)
+                CACHE.stats["misses"] += 1  # what a real SerpApi call records
+                return "https://www.chemist180.com/product/stamlo-5"
+            try:
+                api._fetch_direct_link = fetch_ok
+                r = await client.call_tool("get_buy_link", {"listing_id": lid})
+                b = r.structured_content
+                check("buy link: product page", (r.is_error, b["url"], b["is_product_page"], b["credits_spent"]),
+                      (False, "https://www.chemist180.com/product/stamlo-5", True, 1))
+                check("buy link: resolved the listing's own token and pharmacy",
+                      (seen[-1]["page_token"], seen[-1]["platform"]), ("tok-123", "Chemist180"))
+                api._fetch_direct_link = lambda row: ""
+                b = (await client.call_tool("get_buy_link", {"listing_id": lid})).structured_content
+                check("buy link: falls back to the store search page", (b["url"], b["is_product_page"]),
+                      ("https://chemist180.com/search?q=x", False))
+
+                def fetch_fail(row):
+                    raise RuntimeError("budget reached")
+                api._fetch_direct_link = fetch_fail
+                r = await client.call_tool("get_buy_link", {"listing_id": lid})
+                check("buy link: failure still returns the store page", (r.is_error, r.structured_content["is_product_page"]),
+                      (False, False))
+            finally:
+                api._fetch_direct_link = real_fetch
+            r = await client.call_tool("get_buy_link", {"listing_id": "0123456789abcdef"})
+            check("buy link: unknown id is a clear tool error", (r.is_error, "unknown_listing" in text(r)), (True, True))
+
+            # spelling correction is stated; our own search strings never show as brands
+            def fuzzy_stub(query, pincode, resolve_links=True, use_llm=True, verbose=False):
+                log_call("main search", "exact_hit", False)
+                yield "main", [listing("Dolo 650 Tablet", 30.0)]
+                yield "alternatives", {"composition": {"name": "Paracetamol 650mg tablet", "brands": ["Dolo 650"]},
+                                       "matched_as": "brand", "matched_brand": "Dolo 650", "matched_by": "fuzzy",
+                                       "match_reason": "spelling", "reference": None, "cheaper_alternatives": [],
+                                       "other_alternatives": [], "suggested_alternatives": [],
+                                       "not_found": ["Paracetamol 650mg tablet generic",
+                                                     "Paracetamol 650mg tablet generic chemist180", "Paracip 650"]}
+            api.search_medicine_stream = fuzzy_stub
+            r = await client.call_tool("search_medicine", {"query": "dollo 650", "pincode": "110001"})
+            sc, md = r.structured_content, text(r)
+            check("spelling: corrected name used", (sc["medicine"], sc["spelling_corrected"], sc["query"]),
+                  ("Dolo 650", True, "dollo 650"))
+            check("spelling: stated in markdown", md.startswith("## Dolo 650:") and 'Read "dollo 650" as **Dolo 650**' in md, True)
+            check("not sold here: brands only", sc["not_sold_here"], ["Paracip 650"])
+            check("not sold here: no search strings in markdown", "generic chemist180" in md, False)
 
             r = await client.call_tool("cache_stats", {})
             md = text(r)
@@ -213,7 +295,7 @@ async def part2_stdio(run: int):
     async with Client(params, message_handler=on_message) as client:
         check("server name", client.server_info.name, "pharmawatch")
         check("instructions sent", "credits" in (client.instructions or ""), True)
-        check("4 tools over stdio", len((await client.list_tools()).tools), 4)
+        check("5 tools over stdio", len((await client.list_tools()).tools), 5)
         r = await client.call_tool("cache_lab", {"query": "Stamlo 5"})  # races the model warm-up
         lab_error = r.is_error
         r = await client.call_tool("cache_stats", {"response_format": "json"})

@@ -33,27 +33,27 @@ export default function CacheExplorer({ data, onRefresh }: { data: CacheEntries 
       {data && !data.redis_ok ? (
         <p className="text-sm text-bad">Redis is down: the cache is in passthrough mode.</p>
       ) : (
-        <div className="max-h-80 overflow-auto">
-          <table className="w-full min-w-[520px] text-xs">
+        <div tabIndex={0} aria-label="Cached entries" className="max-h-80 overflow-auto focus-visible:outline-2 focus-visible:outline-hit">
+          <table className="w-full table-fixed text-xs">
             <thead className="sticky top-0 bg-panel">
               <tr className="border-b border-line text-left text-[10px] uppercase tracking-wider text-faint">
                 <th className="py-2 pr-3 font-medium">cached query</th>
-                <th className="py-2 pr-3 font-medium">type</th>
-                <th className="py-2 pr-3 text-right font-medium">expires in</th>
-                <th className="py-2 text-right font-medium">size</th>
+                <th className="w-28 py-2 pr-3 font-medium">type</th>
+                <th className="w-20 py-2 pr-3 text-right font-medium">expires in</th>
+                <th className="hidden w-16 py-2 text-right font-medium sm:table-cell">size</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((e) => (
                 <tr key={e.key} className="border-b border-line/50">
-                  <td className="max-w-[360px] truncate py-1.5 pr-3 font-mono text-muted" title={e.query_text}>
+                  <td className="truncate py-1.5 pr-3 font-mono text-muted" title={e.query_text}>
                     {e.kind === "product_link" ? `product page · ${e.key}` : e.query_text.split(" | ")[0]}
                   </td>
                   <td className="py-1.5 pr-3">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] ${KIND[e.kind].cls}`}>{KIND[e.kind].label}</span>
                   </td>
                   <td className="tnum py-1.5 pr-3 text-right text-muted">{fmtTtl(e.ttl_s)}</td>
-                  <td className="tnum py-1.5 text-right text-faint">{fmtBytes(e.bytes)}</td>
+                  <td className="tnum hidden py-1.5 text-right text-faint sm:table-cell">{fmtBytes(e.bytes)}</td>
                 </tr>
               ))}
             </tbody>

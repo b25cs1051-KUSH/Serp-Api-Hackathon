@@ -27,6 +27,7 @@ RUN python -c "from huggingface_hub import hf_hub_download as d; r='sentence-tra
 COPY serpapi_cache ./serpapi_cache
 COPY pharmawatch ./pharmawatch
 COPY notes/postal_codes_delivery_rules.json ./notes/
+COPY pharmawatch_mcp ./pharmawatch_mcp
 COPY api ./api
 
 # Render sets PORT; 8000 locally.

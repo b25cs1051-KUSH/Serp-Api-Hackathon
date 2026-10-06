@@ -28,7 +28,9 @@ export default function PrescriptionForm({
   setPincode,
   running,
   onSubmit,
+  colorKits = false,
 }: {
+  colorKits?: boolean;
   items: RxItem[];
   setItems: (items: RxItem[]) => void;
   pincode: string;
@@ -69,7 +71,11 @@ export default function PrescriptionForm({
               onClick={() => setItems(k.items)}
               aria-pressed={kit?.id === k.id}
               className={`rounded-full border px-3 py-1 text-xs transition ${
-                kit?.id === k.id ? "border-hit/60 bg-hit/10 text-hit" : "border-line text-muted hover:border-hit/40 hover:text-ink"
+                colorKits
+                  ? `font-semibold ${kit?.id === k.id ? "border-accent bg-accent text-white" : "border-accent/40 bg-accent/5 text-accent hover:bg-accent/10"}`
+                  : kit?.id === k.id
+                    ? "border-hit/60 bg-hit/10 text-hit"
+                    : "border-line text-muted hover:border-hit/40 hover:text-ink"
               }`}
             >
               {k.label}
@@ -97,7 +103,7 @@ export default function PrescriptionForm({
             onChange={(e) => update(i, { q: e.target.value })}
             onPaste={(e) => onPaste(i, e)}
             placeholder={i === 0 ? "e.g. Dolo 650 (paste a whole list to fill every row)" : "Medicine"}
-            className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none placeholder:text-faint focus:border-hit/50"
+            className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit placeholder:text-faint focus:border-hit/50"
           />
           <label className="sr-only" htmlFor={`rx-t-${i}`}>Tablets for medicine {i + 1}</label>
           <input
@@ -109,7 +115,7 @@ export default function PrescriptionForm({
             }}
             inputMode="numeric"
             placeholder="1 pack"
-            className="tnum w-full rounded-lg border border-line bg-bg px-3 py-2.5 font-mono text-sm outline-none placeholder:text-faint focus:border-hit/50"
+            className="tnum w-full rounded-lg border border-line bg-bg px-3 py-2.5 font-mono text-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit placeholder:text-faint focus:border-hit/50"
           />
           <button
             type="button"
@@ -146,7 +152,7 @@ export default function PrescriptionForm({
             onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
             inputMode="numeric"
             placeholder="PIN"
-            className="tnum w-full rounded-lg border border-line bg-bg py-2.5 pl-9 pr-3 font-mono text-sm outline-none focus:border-hit/50"
+            className="tnum w-full rounded-lg border border-line bg-bg py-2.5 pl-9 pr-3 font-mono text-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit focus:border-hit/50"
           />
         </div>
         <button

@@ -1,7 +1,8 @@
 "use client";
 
 import { ArrowRight } from "lucide-react";
-import { inr, type BasketResult, type RxItem, type RxLine } from "@/lib/api";
+import PharmacyLogo from "@/components/PharmacyLogo";
+import { buyLink, inr, type Alternative, type BasketResult, type RxItem, type RxLine } from "@/lib/api";
 
 type Offer = BasketResult["per_line"][number]["cheapest_prescribed"];
 
@@ -67,6 +68,7 @@ export default function LineComparison({
                   />
                 </>
               )}
+              <SameSalt line={l} />
             </div>
           );
         })}
@@ -78,16 +80,57 @@ export default function LineComparison({
 function OfferCell({ offer, empty, highlight, badge }: { offer: Offer; empty: string; highlight?: boolean; badge?: string }) {
   if (!offer) return <div className="text-xs text-faint">{empty}</div>;
   return (
-    <div className={highlight ? "rounded-md bg-hit/[0.07] px-2 py-1" : ""}>
+    <div className={`flex items-center gap-2 ${highlight ? "rounded-md bg-hit/[0.07] px-2 py-1" : ""}`}>
+      <PharmacyLogo platform={offer.platform} size="sm" />
+      <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`font-medium ${highlight ? "text-hit" : ""}`}>{offer.brand}</span>
-        {badge && <span className="rounded bg-hit/15 px-1.5 text-[10px] font-semibold text-hit">{badge}</span>}
+        {badge && <span className="rounded bg-hit px-1.5 text-[10px] font-semibold text-bg">{badge}</span>}
       </div>
       <div className="tnum text-[11px] text-muted">
         {offer.platform} · {inr(offer.item_cost)} · {offer.pack_estimated ? "~" : ""}
         {inr(offer.per_tablet)}
         {offer.unit === "item" ? " each" : "/tablet"}
       </div>
+      </div>
+    </div>
+  );
+}
+
+const perTablet = (a: Alternative) =>
+  a.unit_landed_cost != null ? `${a.pack_estimated ? "~" : ""}${inr(a.unit_landed_cost)}/tablet` : `${inr(a.total_landed_cost)} delivered`;
+
+/** Every brand with the same salt found for this medicine, cheapest first, always visible. */
+function SameSalt({ line }: { line: RxLine | undefined }) {
+  const alts = line?.alternatives;
+  if (!alts) return null;
+  const brands = [...alts.cheaper_alternatives, ...alts.other_alternatives];
+  if (!brands.length) return null;
+  return (
+    <div className="md:col-span-4">
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+        Same salt, other brands <span className="font-normal normal-case tracking-normal">· per tablet, delivery included if bought alone</span>
+      </div>
+      <ul className="flex flex-wrap gap-2">
+        {brands.map((a) => (
+          <li key={`${a.brand}-${a.platform}`}>
+            <a
+              href={buyLink(a)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${a.medicine_name} · ${inr(a.total_landed_cost)} delivered`}
+              className={`flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-3 text-xs hover:border-accent/60 focus-visible:outline-2 focus-visible:outline-accent ${
+                a.is_cheaper ? "border-hit/40 bg-hit/[0.07]" : "border-line bg-panel"
+              }`}
+            >
+              <PharmacyLogo platform={a.platform} src={a.platform_logo} size="sm" />
+              <span className="font-semibold">{a.brand}</span>
+              <span className="text-muted">{a.platform}</span>
+              <span className="tnum font-mono">{perTablet(a)}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

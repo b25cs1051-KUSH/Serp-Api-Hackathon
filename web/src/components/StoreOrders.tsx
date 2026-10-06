@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, ClipboardCopy, ExternalLink, Store, Truck } from "lucide-react";
+import { Check, ClipboardCopy, ExternalLink, Truck } from "lucide-react";
+import PharmacyLogo from "@/components/PharmacyLogo";
 import { useState } from "react";
 import { buyLink, inr, type BasketPlan, type BasketStore, type RxItem } from "@/lib/api";
 
@@ -11,10 +12,6 @@ export default function StoreOrders({ plan, items }: { plan: BasketPlan; items: 
       {plan.stores.map((s) => (
         <StoreOrder key={s.platform} store={s} items={items} />
       ))}
-      <p className="px-1 text-xs text-faint">
-        Pharmacies don&apos;t let other sites fill their carts. The open button takes you through each product page in turn, one
-        tab per click; add the quantity shown on each.
-      </p>
     </div>
   );
 }
@@ -53,7 +50,7 @@ function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
     <div className="rise card p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Store className="h-4 w-4 text-hit" />
+          <PharmacyLogo platform={store.platform} />
           <h3 className="font-semibold">{store.platform}</h3>
           <span className={`flex items-center gap-1 text-xs ${store.free_delivery ? "text-hit" : "text-miss"}`}>
             <Truck className="h-3 w-3" /> {store.free_delivery ? "free delivery" : `${inr(store.fee)} delivery`}
@@ -77,7 +74,7 @@ function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">{o.brand}</span>
                   {!o.prescribed && (
-                    <span className="rounded bg-hit/15 px-1.5 py-0.5 text-[10px] font-semibold text-hit">
+                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 ring-1 ring-emerald-300">
                       SWAP for {items[o.line]?.q ?? "this medicine"}
                     </span>
                   )}

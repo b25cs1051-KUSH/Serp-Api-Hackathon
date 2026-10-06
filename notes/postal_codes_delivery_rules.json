@@ -277,11 +277,13 @@
           "order_value_slabs": [
             {
               "min_order": 0,
-              "fee": 93.22
+              "fee": 93.22,
+              "label": "₹93.22 delivery (₹79 + GST)"
             },
             {
               "min_order": 199,
-              "fee": 7.08
+              "fee": 7.08,
+              "label": "FREE delivery · ₹7.08 platform fee + GST"
             }
           ]
         },
@@ -292,11 +294,13 @@
           "order_value_slabs": [
             {
               "min_order": 0,
-              "fee": 93.22
+              "fee": 93.22,
+              "label": "₹93.22 delivery (₹79 + GST)"
             },
             {
               "min_order": 199,
-              "fee": 7.08
+              "fee": 7.08,
+              "label": "FREE delivery · ₹7.08 platform fee + GST"
             }
           ]
         },
@@ -307,11 +311,13 @@
           "order_value_slabs": [
             {
               "min_order": 0,
-              "fee": 93.22
+              "fee": 93.22,
+              "label": "₹93.22 delivery (₹79 + GST)"
             },
             {
               "min_order": 199,
-              "fee": 7.08
+              "fee": 7.08,
+              "label": "FREE delivery · ₹7.08 platform fee + GST"
             }
           ]
         },
@@ -322,11 +328,13 @@
           "order_value_slabs": [
             {
               "min_order": 0,
-              "fee": 93.22
+              "fee": 93.22,
+              "label": "₹93.22 delivery (₹79 + GST)"
             },
             {
               "min_order": 199,
-              "fee": 7.08
+              "fee": 7.08,
+              "label": "FREE delivery · ₹7.08 platform fee + GST"
             }
           ]
         },

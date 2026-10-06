@@ -860,3 +860,18 @@ def cache_entries():
         counts[e["kind"]] = counts.get(e["kind"], 0) + 1
     return {"redis_ok": True, "entries": entries, "counts": counts,
             "total_bytes": sum(e["bytes"] or 0 for e in entries)}
+
+
+# ─────────────────────────────────────────────
+# MCP over Streamable HTTP at /mcp: the public connector (pharmawatch_mcp/remote.py).
+# Same process as the website's API, so one cache, one credit budget and one link registry.
+# MCP_HTTP=0 turns it off; without the mcp package the API runs as before.
+# ─────────────────────────────────────────────
+
+if os.getenv("MCP_HTTP", "1") != "0":
+    try:
+        from pharmawatch_mcp.remote import attach as _attach_mcp
+    except ImportError as e:
+        log.warning("MCP endpoint disabled: %s", e)
+    else:
+        _attach_mcp(app)

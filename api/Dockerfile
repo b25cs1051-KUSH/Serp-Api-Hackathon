@@ -28,6 +28,7 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 COPY serpapi_cache ./serpapi_cache
 COPY pharmawatch ./pharmawatch
 COPY notes/postal_codes_delivery_rules.json ./notes/
+COPY pharmawatch_mcp ./pharmawatch_mcp
 COPY api ./api
 
 EXPOSE 8000

@@ -64,11 +64,12 @@ export default function UnderTheHood({ state, note }: { state: SearchState; note
           <span className="flex items-center gap-1"><Gauge className="h-3 w-3" /> timeline</span>
           <span className="tnum font-mono">0 → {fmtMs(total)}</span>
         </div>
-        <div className="relative rounded-lg border border-line bg-bg/60 p-2">
+        <div className="relative overflow-hidden rounded-lg border border-line bg-bg/60 p-2">
           {stages.map((s, i) => (
             <div key={`${s.name}-${i}`} className="pointer-events-none absolute top-0 bottom-0 z-10" style={{ left: `calc(${pct(s.at_ms)} * 0.96 + 2%)` }}>
               <div className="h-full border-l border-dashed border-hit/40" />
-              <div className="absolute -top-0.5 left-1 whitespace-nowrap rounded bg-panel px-1 text-[9px] text-hit/80">
+              {/* Labels of late stages sit left of their line so they stay inside the panel. */}
+              <div className={`absolute -top-0.5 whitespace-nowrap rounded bg-panel px-1 text-[9px] text-hit/80 ${s.at_ms / total > 0.6 ? "right-1" : "left-1"}`}>
                 {STAGE_LABEL[s.name] ?? s.name}
               </div>
             </div>
@@ -103,7 +104,7 @@ export default function UnderTheHood({ state, note }: { state: SearchState; note
         <div className="mb-2 flex items-center gap-1 text-[11px] text-faint">
           <Zap className="h-3 w-3" /> call log
         </div>
-        <div className="max-h-[360px] space-y-1.5 overflow-y-auto pr-1">
+        <div tabIndex={0} aria-label="Call log" className="max-h-[360px] space-y-1.5 overflow-y-auto pr-1 focus-visible:outline-2 focus-visible:outline-hit">
           {calls.map((c) => (
             <div key={c.n} className="rise flex items-start gap-3 rounded-lg border border-line bg-panel-2 px-3 py-2">
               <span className="tnum mt-0.5 w-5 shrink-0 text-right font-mono text-[11px] text-faint">{c.n}</span>

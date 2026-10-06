@@ -49,7 +49,7 @@ export default function CacheLab() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Type any medicine query. Nothing is searched, 0 credits"
-            className="w-full rounded-lg border border-line bg-bg py-2.5 pl-9 pr-3 text-sm outline-none placeholder:text-faint focus:border-sem/60"
+            className="w-full rounded-lg border border-line bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit placeholder:text-faint focus:border-sem/60"
           />
         </div>
         <button className="rounded-lg bg-sem/15 px-4 py-2.5 text-sm font-medium text-sem ring-1 ring-sem/30 hover:bg-sem/25 disabled:opacity-50" disabled={loading}>
