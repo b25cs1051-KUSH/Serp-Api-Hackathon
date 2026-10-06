@@ -1,7 +1,7 @@
 # Render Blueprint: PharmaWatch on Render's free plan (New → Blueprint → this repo).
 #   pharmawatch-cache  Key Value (Redis-compatible), 25 MB, internal only
 #   pharmawatch-api    FastAPI, api/Dockerfile.render (no PyTorch: ~180 MB idle, ~250 MB under load)
-#   pharmawatch-web    Next.js standalone server
+#   serpapi-web        Next.js standalone server built with web/Dockerfile
 # Keys are entered in the Render dashboard (sync: false); they are never in this file or an image.
 # Free web services sleep after 15 min idle; the first request after that takes about a minute.
 # The browser API URL is fixed at web build time. Cross-service references follow the
@@ -41,20 +41,17 @@ services:
       - key: MAX_CONCURRENT_SEARCHES  # free instances get a fraction of a CPU
         value: "3"
       - key: UI_ORIGINS
-        fromService: { type: web, name: pharmawatch-web, envVarKey: RENDER_EXTERNAL_URL }
+        fromService: { type: web, name: serpapi-web, envVarKey: RENDER_EXTERNAL_URL }
 
   - type: web
-    name: pharmawatch-web
-    runtime: node
+    name: serpapi-web
+    runtime: docker
     plan: free
     region: singapore
     rootDir: web
-    buildCommand: npm ci && npm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
-    startCommand: node .next/standalone/server.js
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
     envVars:
       - key: NEXT_PUBLIC_API_URL      # read by the browser, fixed at build time
         fromService: { type: web, name: pharmawatch-api, envVarKey: RENDER_EXTERNAL_URL }
-      - key: HOSTNAME                 # listen on all interfaces, not the container's hostname
-        value: 0.0.0.0
-      - key: NODE_VERSION
-        value: "22"
