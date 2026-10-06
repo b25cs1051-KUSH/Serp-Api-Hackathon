@@ -110,8 +110,23 @@ export default function ShopView() {
               </button>
             </form>
 
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 px-1 text-xs text-muted" aria-label="Popular searches">
+              <span className="font-medium">Popular:</span>
+              {EXAMPLES.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => search(e)}
+                  disabled={running}
+                  className="rounded-full border border-line/80 bg-panel/70 px-2.5 py-0.5 hover:border-accent/50 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50"
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+
             {state.status === "idle" ? (
-              <EmptyState examples={EXAMPLES} onSearch={search} onPaste={() => setTab("rx")} />
+              <EmptyState onPaste={() => setTab("rx")} />
             ) : (
               <section className="mt-6 space-y-5">
                 {state.error && <ErrorNote message={state.error} />}

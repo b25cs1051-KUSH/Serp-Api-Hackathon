@@ -74,7 +74,7 @@ function StoreOrder({ store, items }: { store: BasketStore; items: RxItem[] }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">{o.brand}</span>
                   {!o.prescribed && (
-                    <span className="rounded bg-[#fde68a] px-1.5 py-0.5 text-[10px] font-bold text-[#713f12] ring-1 ring-[#f59e0b]/50">
+                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 ring-1 ring-emerald-300">
                       SWAP for {items[o.line]?.q ?? "this medicine"}
                     </span>
                   )}

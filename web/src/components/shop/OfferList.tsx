@@ -14,9 +14,10 @@ const DELIVERY_TONE: Record<Listing["delivery_status"], string> = {
   unserviceable: "text-bad",
 };
 
-function Badge({ tone, children }: { tone: "green" | "yellow" | "red" | "blue"; children: React.ReactNode }) {
+function Badge({ tone, children }: { tone: "green" | "lightgreen" | "yellow" | "red" | "blue"; children: React.ReactNode }) {
   const cls = {
     green: "bg-hit/12 text-hit ring-hit/30",
+    lightgreen: "bg-emerald-100 text-emerald-800 ring-emerald-300",
     yellow: "bg-[#fde68a] text-[#713f12] ring-[#f59e0b]/50",
     red: "bg-bad text-white ring-bad",
     blue: "bg-sem/10 text-sem ring-sem/30",
@@ -58,8 +59,8 @@ function PerTablet({ o }: { o: Offer }) {
 function Badges({ o, cheapest }: { o: Offer; cheapest: boolean }) {
   return (
     <>
-      {cheapest && <Badge tone="green">Cheapest</Badge>}
-      {o.isSwap && <Badge tone="yellow">Same salt</Badge>}
+      {cheapest && <Badge tone="yellow">Cheapest</Badge>}
+      {o.isSwap && <Badge tone="lightgreen">Same salt</Badge>}
       {o.savingsPct != null && o.savingsPct > 0 && <Badge tone="red">−{Math.round(o.savingsPct)}%</Badge>}
       {o.listing.delivery_status === "free" && <Badge tone="green">Free delivery</Badge>}
     </>
@@ -78,7 +79,7 @@ export default function OfferList({ offers, pending, framed = true }: { offers: 
           const l = o.listing;
           const top = o.key === cheapestKey;
           return (
-            <li key={o.key} className={`rounded-xl border bg-panel px-3 py-3 ${top ? "border-hit/50 ring-1 ring-hit/30" : "border-line"}`}>
+            <li key={o.key} className={`rounded-xl border bg-panel px-3 py-3 ${top ? "border-amber-400 ring-1 ring-amber-300" : o.isSwap ? "border-emerald-200" : "border-line"}`}>
               <div className="flex items-start gap-2.5">
                 <PharmacyLogo platform={l.platform} src={l.platform_logo} />
                 <div className="min-w-0 flex-1">
@@ -129,9 +130,9 @@ export default function OfferList({ offers, pending, framed = true }: { offers: 
               const l = o.listing;
               const top = o.key === cheapestKey;
               return (
-                <tr key={o.key} className={`border-b border-line/70 last:border-0 ${top ? "bg-hit/[0.07]" : o.isSwap ? "bg-[#fef9c3]/40" : ""}`}>
+                <tr key={o.key} className={`border-b border-line/70 last:border-0 ${top ? "bg-amber-50" : o.isSwap ? "bg-emerald-50/60" : ""}`}>
                   <td className="py-3 pl-4 pr-2 align-top">
-                    {top ? <Trophy aria-label="Cheapest" className="h-4 w-4 text-hit" /> : <span className="tnum text-muted">{i + 1}</span>}
+                    {top ? <Trophy aria-label="Cheapest" className="h-4 w-4 text-amber-500" /> : <span className="tnum text-muted">{i + 1}</span>}
                   </td>
                   <td className="py-3 pr-3">
                     <div className="flex items-start gap-2.5">

@@ -2,7 +2,7 @@
 
 import { Loader2, MapPin, Plus, Search, Stethoscope, X } from "lucide-react";
 import type { RxItem } from "@/lib/api";
-import { KIT_COLORS, KITS, matchingKit } from "@/lib/kits";
+import { KITS, matchingKit } from "@/lib/kits";
 
 export const RX_EXAMPLE: RxItem[] = [
   { q: "Dolo 650", tablets: 30 },
@@ -72,7 +72,7 @@ export default function PrescriptionForm({
               aria-pressed={kit?.id === k.id}
               className={`rounded-full border px-3 py-1 text-xs transition ${
                 colorKits
-                  ? `font-semibold shadow-sm hover:brightness-95 ${KIT_COLORS[k.id]?.[kit?.id === k.id ? 1 : 0] ?? ""}`
+                  ? `font-semibold ${kit?.id === k.id ? "border-accent bg-accent text-white" : "border-accent/40 bg-accent/5 text-accent hover:bg-accent/10"}`
                   : kit?.id === k.id
                     ? "border-hit/60 bg-hit/10 text-hit"
                     : "border-line text-muted hover:border-hit/40 hover:text-ink"

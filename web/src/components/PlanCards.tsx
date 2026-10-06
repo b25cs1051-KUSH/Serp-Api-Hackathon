@@ -18,7 +18,7 @@ export const countLines = (plan: BasketPlan) => plan.stores.reduce((n, s) => n +
 const SHOP_STYLE: Record<PlanId, { panel: string; title: string; icon: typeof Store }> = {
   cheapest: { panel: "border-hit/60 bg-hit/[0.08] border-l-[6px] border-l-hit", title: "text-hit", icon: TrendingDown },
   single: { panel: "border-sem/40 bg-sem/[0.06] border-l-[6px] border-l-sem", title: "text-sem", icon: Store },
-  prescribed: { panel: "border-[#f59e0b]/50 bg-[#fef3c7]/60 border-l-[6px] border-l-[#d97706]", title: "text-[#92400e]", icon: ClipboardCheck },
+  prescribed: { panel: "border-sem/40 bg-sem/[0.06] border-l-[6px] border-l-sem", title: "text-sem", icon: ClipboardCheck },
 };
 
 export function PlanHeader({ basket, id, total, variant = "engine" }: { basket: BasketResult; id: PlanId; total: number; variant?: "engine" | "shop" }) {
