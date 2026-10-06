@@ -37,13 +37,14 @@
 /* Light pages: the dark tokens remapped, so shared components render light inside this scope. */
 .theme-light {
   color-scheme: light;
-  --color-bg: #fbfbf9;
+  /* A tinted ground with white surfaces on it: every section reads as its own panel. */
+  --color-bg: #e9f0ed;
   --color-panel: #ffffff;
-  --color-panel-2: #f3f4f1;
-  --color-line: #e5e6e3;
-  --color-ink: #111418;
-  --color-muted: #5f6670;
-  --color-faint: #646a73;
+  --color-panel-2: #f2f7f5;
+  --color-line: #c9d6d1;
+  --color-ink: #0e1a17;
+  --color-muted: #44524d;
+  --color-faint: #56645f;
   --color-hit: #056b4b;
   --color-sem: #1f5fa8;
   --color-miss: #9a5208;
@@ -51,6 +52,20 @@
   --color-llm: #6d3fc0;
   background: var(--color-bg);
   color: var(--color-ink);
+}
+
+/* Surfaces on the light pages: a white panel with a firm edge and a soft lift. */
+.theme-light .card,
+.theme-light .surface {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(14, 40, 33, 0.06), 0 6px 20px -14px rgba(14, 40, 33, 0.35);
+}
+
+.theme-light .shimmer {
+  background: linear-gradient(90deg, #dfe8e4 0, #eef4f1 50%, #dfe8e4 100%);
+  background-size: 400px 100%;
 }
 
 /* The engine's console surface, dark inside any page. */

@@ -88,16 +88,14 @@ export default function EngineView() {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 pb-24 sm:px-6">
-      <SiteHeader tagline="SerpApi · Redis semantic cache · Gemini" />
+      <SiteHeader current="engine" />
       <StatusPills health={health} healthErr={healthErr} account={account} />
 
       <section className="pt-8 pb-8">
         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-hit">Under the hood</div>
         <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">Every SerpApi call, cache decision and credit, live.</h1>
         <p className="mt-3 max-w-2xl text-sm text-muted">
-          Run a medicine or a whole prescription and watch each lookup: an exact Redis hit, a semantic hit with its similarity score, or a
-          SerpApi call that costs one credit. Run it again and it costs nothing. Below: how the cache decides, a lab to test it for free, and
-          what is in Redis right now.
+          Each lookup is an exact Redis hit, a semantic hit, or a SerpApi call that costs one credit. Run it twice: the second run is free.
         </p>
 
         <ModeToggle mode={mode} onChange={setMode} />

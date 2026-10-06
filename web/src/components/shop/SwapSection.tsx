@@ -1,6 +1,7 @@
 "use client";
 
 import { BadgeCheck, ShieldCheck, Store } from "lucide-react";
+import PharmacyLogo from "@/components/PharmacyLogo";
 import { inr, type Alternative, type AltResult } from "@/lib/api";
 import { BuyLink } from "./ProductCard";
 
@@ -12,9 +13,10 @@ const perUnit = (a: Alternative) =>
 /** "Same salt, same strength: X at ₹y per tablet. Save N%", with its Buy link and the caution. */
 function SwapStrip({ a }: { a: Alternative }) {
   return (
-    <li className="rise rounded-xl border border-hit/30 bg-hit/[0.06] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+    <li className="rise rounded-xl border border-hit/40 bg-hit/[0.07] p-4">
+      <div className="flex items-start gap-3">
+        <PharmacyLogo platform={a.platform} src={a.platform_logo} size="lg" />
+        <div className="min-w-0 flex-1">
           <p className="text-sm">
             <span className="text-muted">Same salt, same strength: </span>
             <span className="font-semibold">{a.brand}</span> at <span className="tnum font-mono">{perUnit(a)}</span>.
@@ -70,6 +72,9 @@ export default function SwapSection({
   const others = result.other_alternatives.filter(only);
   const ref = result.reference;
   const c = result.composition;
+  // not_found also lists our own searches ("Amlodipine 5mg tablet generic …"); show brand names only.
+  const searched = (result.matched_brand ?? result.query).toLowerCase();
+  const notSold = result.not_found.filter((n) => !/generic/i.test(n) && !n.toLowerCase().startsWith(searched));
 
   return (
     <section aria-labelledby="swaps-title" className="space-y-3">
@@ -105,29 +110,32 @@ export default function SwapSection({
       )}
 
       {others.length > 0 && (
-        <details className="rounded-xl border border-line bg-panel" open={result.matched_as === "salt"}>
-          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Other brands with the same salt ({others.length})</summary>
-          <ul className="divide-y divide-line border-t border-line">
+        <div className="surface overflow-hidden">
+          <h3 className="border-b border-line bg-panel-2 px-4 py-2.5 text-sm font-semibold">
+            {result.matched_as === "salt" ? "Brands" : "Other brands with the same salt"} <span className="font-normal text-muted">({others.length})</span>
+          </h3>
+          <ul className="divide-y divide-line">
             {others.map((a) => (
-              <li key={`o-${a.brand}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
-                <span className="min-w-0">
-                  <span className="font-medium">{a.brand}</span> <span className="text-xs text-muted">at {a.platform}{a.manufacturer ? ` · ${a.manufacturer}` : ""}</span>
+              <li key={`o-${a.brand}-${a.platform}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                <PharmacyLogo platform={a.platform} src={a.platform_logo} />
+                <span className="min-w-0 flex-1">
+                  <span className="font-semibold">{a.brand}</span>{" "}
+                  <span className="text-xs text-muted">
+                    at {a.platform}
+                    {a.manufacturer ? ` · ${a.manufacturer}` : ""}
+                  </span>
                   <span className="tnum block font-mono text-xs text-muted">
                     {perUnit(a)} · {inr(a.total_landed_cost)} delivered
                   </span>
                 </span>
-                <span className="flex items-center gap-2">
-                  <BuyLink l={a} />
-                </span>
+                <BuyLink l={a} />
               </li>
             ))}
           </ul>
-        </details>
+        </div>
       )}
 
-      {result.not_found.length > 0 && (
-        <p className="text-xs text-muted">Searched, but not sold online for this PIN right now: {result.not_found.join(", ")}.</p>
-      )}
+      {notSold.length > 0 && <p className="text-xs text-muted">Not sold online for this PIN right now: {notSold.join(", ")}.</p>}
       <p className="text-[11px] text-muted">{CAUTION}</p>
     </section>
   );

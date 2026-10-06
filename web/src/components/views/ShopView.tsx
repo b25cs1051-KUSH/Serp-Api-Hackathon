@@ -11,6 +11,7 @@ import ShopHeader, { type ShopTab } from "@/components/shop/ShopHeader";
 import { EmptyState, ErrorNote, FilterChips, LoadingCards, deliveryHours, type Filter } from "@/components/shop/ShopStates";
 import SwapSection from "@/components/shop/SwapSection";
 import type { Listing, RxItem } from "@/lib/api";
+import { rememberLogos } from "@/lib/logos";
 import { usePrescription } from "@/lib/usePrescription";
 import { useSearch } from "@/lib/useSearch";
 
@@ -58,6 +59,13 @@ export default function ShopView() {
   };
 
   const listings = state.listings ?? [];
+  // Store icons from every result, so basket orders and swaps show the same pharmacy logos.
+  rememberLogos(listings);
+  rememberLogos(state.alternatives ? [...state.alternatives.cheaper_alternatives, ...state.alternatives.other_alternatives] : []);
+  for (const l of Object.values(rx.state.lines)) {
+    rememberLogos(l.listings);
+    if (l.alternatives) rememberLogos([...l.alternatives.cheaper_alternatives, ...l.alternatives.other_alternatives]);
+  }
   const zone = state.pincode === pincode ? listings[0]?.pincode_zone : undefined;
   const name = state.alternatives?.matched_brand ?? state.query;
   const pending = (l: Listing) => state.links && !state.linksResolved && listings.indexOf(l) < 5;
@@ -83,7 +91,7 @@ export default function ShopView() {
                 e.preventDefault();
                 search();
               }}
-              className="flex gap-2"
+              className="surface flex gap-2 p-3"
             >
               <div className="relative min-w-0 flex-1">
                 <Search aria-hidden className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
@@ -93,7 +101,7 @@ export default function ShopView() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search a medicine, e.g. Dolo 650"
-                  className="w-full rounded-lg border border-line bg-panel py-3 pl-9 pr-3 text-base outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit placeholder:text-faint focus:border-accent"
+                  className="w-full rounded-lg border border-line bg-panel-2 py-3 pl-9 pr-3 text-base outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-hit placeholder:text-faint focus:border-accent"
                 />
               </div>
               <button
@@ -147,11 +155,8 @@ export default function ShopView() {
           </div>
         ) : (
           <div id="panel-rx" role="tabpanel" aria-labelledby="tab-rx" className="py-6">
-            <h1 className="text-2xl font-semibold tracking-tight">Your whole prescription</h1>
-            <p className="mt-1 text-sm text-muted">
-              Type or paste your medicines (one per line, e.g. &ldquo;Dolo 650 x30&rdquo;), or start from a common prescription. We find the cheapest way to buy
-              all of them, delivery included.
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight">Your prescription</h1>
+            <p className="mt-1 text-sm text-muted">One medicine per line, e.g. &ldquo;Dolo 650 x30&rdquo;. We find the cheapest way to buy all of it.</p>
             <PrescriptionForm items={rxItems} setItems={setRxItems} pincode={pincode} setPincode={setPincode} running={rxRunning} onSubmit={() => submitRx()} />
             {rx.state.status !== "idle" && (
               <div className="mt-8">

@@ -45,16 +45,16 @@ export function deliveryHours(days?: string): number {
 
 export function EmptyState({ examples, onSearch, onPaste }: { examples: string[]; onSearch: (q: string) => void; onPaste: () => void }) {
   return (
-    <section className="py-10">
-      <h1 className="max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">The lowest price for your medicines, delivered to your PIN.</h1>
-      <p className="mt-2 max-w-xl text-sm text-muted">Search one medicine, or switch to Whole prescription and we&apos;ll find the cheapest way to buy all of it.</p>
+    <section className="py-8">
+      <h1 className="max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">Lowest delivered price for your medicines.</h1>
       <div className="mt-5 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted">Try</span>
         {examples.map((e) => (
           <button
             key={e}
             type="button"
             onClick={() => onSearch(e)}
-            className="rounded-full border border-line bg-panel px-3 py-1.5 text-sm hover:border-accent/50 focus-visible:outline-2 focus-visible:outline-accent"
+            className="rounded-full border border-line bg-panel px-3 py-1.5 text-sm font-medium shadow-sm hover:border-accent/60 focus-visible:outline-2 focus-visible:outline-accent"
           >
             {e}
           </button>
@@ -62,9 +62,9 @@ export function EmptyState({ examples, onSearch, onPaste }: { examples: string[]
         <button
           type="button"
           onClick={onPaste}
-          className="flex items-center gap-1.5 rounded-full border border-dashed border-line px-3 py-1.5 text-sm text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+          className="flex items-center gap-1.5 rounded-full border border-dashed border-accent/50 px-3 py-1.5 text-sm font-medium text-accent hover:bg-panel focus-visible:outline-2 focus-visible:outline-accent"
         >
-          <ClipboardList className="h-4 w-4" /> Paste your prescription
+          <ClipboardList className="h-4 w-4" /> Paste a prescription
         </button>
       </div>
     </section>

@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
-import ShopView from "@/components/views/ShopView";
+import ShopRedirect from "@/components/shell/ShopRedirect";
 
-export const metadata: Metadata = { title: "PharmaWatch Shop" };
-
+/** Old address: the shop is now the home page. */
 export default function ShopPage() {
-  return <ShopView />;
+  return <ShopRedirect />;
 }

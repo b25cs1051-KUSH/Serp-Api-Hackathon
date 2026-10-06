@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink, Info, Truck } from "lucide-react";
+import PharmacyLogo from "@/components/PharmacyLogo";
 import { buyLink, inr, isProductLink, type Alternative, type Listing } from "@/lib/api";
 
 const STATUS_TEXT: Record<Listing["delivery_status"], string> = {
@@ -53,7 +54,7 @@ export default function ProductCard({
     lowestShelf.total_landed_cost > best.total_landed_cost;
 
   return (
-    <article className="rise rounded-xl border border-line bg-panel p-4 sm:p-5" aria-label={name}>
+    <article className="rise surface p-4 sm:p-5" aria-label={name}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold">{name}</h2>
@@ -62,9 +63,12 @@ export default function ProductCard({
             {best.medicine_name}
           </p>
         </div>
-        <div className="text-right">
-          <div className="tnum font-mono text-2xl font-semibold">{inr(best.total_landed_cost)}</div>
-          <div className="text-xs text-muted">delivered, at {best.platform}</div>
+        <div className="flex items-center gap-3">
+          <PharmacyLogo platform={best.platform} src={best.platform_logo} size="lg" />
+          <div className="text-right">
+            <div className="tnum font-mono text-2xl font-semibold">{inr(best.total_landed_cost)}</div>
+            <div className="text-xs text-muted">delivered, at <span className="font-semibold text-ink">{best.platform}</span></div>
+          </div>
         </div>
       </div>
 
@@ -95,7 +99,7 @@ export default function ProductCard({
 
       {others.length > 0 && (
         <div className="mt-4 border-t border-line pt-3">
-          <div className="mb-2 text-xs text-muted">Also at</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">Also at</div>
           <ul className="flex flex-wrap gap-2">
             {others.map((l, i) => (
               <li key={`${l.platform}-${l.medicine_name}-${l.price_inr}-${i}`}>
@@ -104,8 +108,9 @@ export default function ProductCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   title={`${l.medicine_name} · ${l.delivery_label}${l.estimated_days ? ` · ${l.estimated_days}` : ""}`}
-                  className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-xs hover:border-accent/50 focus-visible:outline-2 focus-visible:outline-accent"
+                  className="flex items-center gap-1.5 rounded-full border border-line bg-panel-2 py-1 pl-1 pr-3 text-xs hover:border-accent/50 focus-visible:outline-2 focus-visible:outline-accent"
                 >
+                  <PharmacyLogo platform={l.platform} src={l.platform_logo} size="sm" />
                   <span className="font-medium">{l.platform}</span>
                   <span className={`tnum font-mono ${delivered(l) ? "" : STATUS_TEXT[l.delivery_status]}`}>
                     {l.total_landed_cost != null ? inr(l.total_landed_cost) : inr(l.price_inr)}

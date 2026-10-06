@@ -68,6 +68,7 @@ export default function BasketCard({
         );
       })}
       <SwapNote basket={basket} />
+      <p className="px-1 text-xs text-faint">&ldquo;Open&rdquo; opens one product page per click (pharmacies don&apos;t let other sites fill their carts); add the quantity shown.</p>
 
       <LineComparison basket={basket} lines={lines} items={items} />
 
