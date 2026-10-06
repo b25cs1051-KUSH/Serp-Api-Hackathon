@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink, Trophy, Truck } from "lucide-react";
+import { ChevronDown, ExternalLink, Trophy, Truck } from "lucide-react";
+import { useState } from "react";
 import PharmacyLogo from "@/components/PharmacyLogo";
 import { buyLink, inr, isProductLink, type Listing } from "@/lib/api";
 import { byPrice, deliverable, type Offer } from "@/lib/offers";
@@ -68,9 +69,15 @@ function Badges({ o, cheapest }: { o: Offer; cheapest: boolean }) {
 }
 
 /** Ranked offers: rank, pharmacy, product, per-tablet price, delivery, what you pay, and the pharmacy's page. */
-export default function OfferList({ offers, pending, framed = true }: { offers: Offer[]; pending?: (l: Listing) => boolean; framed?: boolean }) {
+const PAGE = 10;
+
+export default function OfferList({ offers: all, pending, framed = true }: { offers: Offer[]; pending?: (l: Listing) => boolean; framed?: boolean }) {
+  // Long lists open 10 at a time, so the next medicine is never far below.
+  const [visible, setVisible] = useState(PAGE);
+  const offers = all.slice(0, visible);
+  const left = all.length - offers.length;
   // The cheapest deliverable offer, whatever order the list is in (e.g. sorted by delivery speed).
-  const cheapestKey = [...offers].filter(deliverable).sort(byPrice)[0]?.key;
+  const cheapestKey = [...all].filter(deliverable).sort(byPrice)[0]?.key;
   return (
     <>
       {/* Phone: one card per offer */}
@@ -170,6 +177,18 @@ export default function OfferList({ offers, pending, framed = true }: { offers: 
           </tbody>
         </table>
       </div>
+      {left > 0 && (
+        <button
+          type="button"
+          onClick={() => setVisible((v) => v + PAGE)}
+          className={`flex w-full items-center justify-center gap-1.5 border-line bg-panel-2 py-2.5 text-sm font-semibold text-accent hover:bg-accent/10 focus-visible:outline-2 focus-visible:outline-accent ${
+            framed ? "mt-2 rounded-xl border" : "mt-2 rounded-xl border md:mt-0 md:rounded-none md:border-0 md:border-t"
+          }`}
+        >
+          <ChevronDown aria-hidden className="h-4 w-4" />
+          More options · show {Math.min(PAGE, left)} more{left > PAGE ? ` (${left} left)` : ""}
+        </button>
+      )}
     </>
   );
 }
