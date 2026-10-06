@@ -1,17 +1,18 @@
 "use client";
 
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, ShieldCheck, Stethoscope, Timer, TrendingDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import ChooseCard from "@/components/ChooseCard";
 import PrescriptionForm, { RX_EXAMPLE } from "@/components/PrescriptionForm";
 import SiteFooter from "@/components/shell/SiteFooter";
-import ProductCard, { delivered } from "@/components/shop/ProductCard";
+import ProductCard from "@/components/shop/ProductCard";
 import Receipt from "@/components/shop/Receipt";
 import ShopHeader, { type ShopTab } from "@/components/shop/ShopHeader";
-import { EmptyState, ErrorNote, FilterChips, LoadingCards, deliveryHours, type Filter } from "@/components/shop/ShopStates";
-import SwapSection from "@/components/shop/SwapSection";
+import OfferList from "@/components/shop/OfferList";
+import { EmptyState, ErrorNote, LoadingCards } from "@/components/shop/ShopStates";
 import type { Listing, RxItem } from "@/lib/api";
 import { rememberLogos } from "@/lib/logos";
+import { buildOffers, byPrice, bySpeed } from "@/lib/offers";
 import { usePrescription } from "@/lib/usePrescription";
 import { useSearch } from "@/lib/useSearch";
 
@@ -23,7 +24,7 @@ export default function ShopView() {
   const [tab, setTab] = useState<ShopTab>("one");
   const [query, setQuery] = useState("");
   const [pincode, setPincode] = useState("110001");
-  const [filter, setFilter] = useState<Filter>("cheapest");
+  const [sort, setSort] = useState<"price" | "speed">("price");
   const [rxItems, setRxItems] = useState<RxItem[]>(RX_EXAMPLE);
 
   // /shop?tab=rx opens the prescription tab (read after mount so the static page stays the same for everyone).
@@ -44,7 +45,7 @@ export default function ShopView() {
     if (!text || running || pincode.length !== 6) return;
     setQuery(text);
     setTab("one");
-    setFilter("cheapest");
+    setSort("price");
     run(text, pincode, true);
   };
   const submitRx = (items: RxItem[] = rxItems) => {
@@ -69,14 +70,10 @@ export default function ShopView() {
   const zone = state.pincode === pincode ? listings[0]?.pincode_zone : undefined;
   const name = state.alternatives?.matched_brand ?? state.query;
   const pending = (l: Listing) => state.links && !state.linksResolved && listings.indexOf(l) < 5;
-  const shown =
-    filter === "free"
-      ? listings.filter((l) => l.delivery_status === "free")
-      : filter === "fastest"
-        ? [...listings.filter(delivered)]
-            .sort((a, b) => deliveryHours(a.estimated_days) - deliveryHours(b.estimated_days) || (a.total_landed_cost ?? 0) - (b.total_landed_cost ?? 0))
-            .concat(listings.filter((l) => !delivered(l)))
-        : listings;
+  const offers = buildOffers(name, listings, state.alternatives).sort(sort === "price" ? byPrice : bySpeed);
+  const alts = state.alternatives;
+  const searched = (alts?.matched_brand ?? state.query).toLowerCase();
+  const notSold = (alts?.not_found ?? []).filter((n) => !/generic/i.test(n) && !n.toLowerCase().startsWith(searched));
 
   return (
     <div className="theme-light min-h-screen w-full">
@@ -136,18 +133,59 @@ export default function ShopView() {
                       </p>
                     ) : (
                       <>
-                        <FilterChips value={filter} onChange={setFilter} />
-                        {filter !== "swaps" &&
-                          (shown.length ? (
-                            <ProductCard name={name} listings={shown} reference={state.alternatives?.reference} pending={pending} />
-                          ) : (
-                            <p className="rounded-xl border border-dashed border-line p-5 text-sm text-muted">
-                              No pharmacy delivers {name} free to {state.pincode}. Cheapest delivered is shown under &ldquo;Cheapest delivered&rdquo;.
+                        <ProductCard name={name} listings={listings} reference={alts?.reference} pending={pending} />
+
+                        <section aria-labelledby="offers-title" className="surface overflow-hidden">
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-panel-2 px-4 py-3">
+                            <div>
+                              <h2 id="offers-title" className="text-base font-bold">
+                                Every offer <span className="font-normal text-muted">· {offers.length}</span>
+                              </h2>
+                              <p className="text-xs text-muted">
+                                {name} and brands with the same salt{alts?.composition ? ` (${alts.composition.name})` : ""}, delivered to {state.pincode}
+                              </p>
+                            </div>
+                            <div role="tablist" aria-label="Sort offers" className="flex rounded-lg bg-panel p-1 ring-1 ring-line">
+                              {([
+                                ["price", "Best price", TrendingDown],
+                                ["speed", "Fastest delivery", Timer],
+                              ] as const).map(([id, label, Icon]) => (
+                                <button
+                                  key={id}
+                                  type="button"
+                                  role="tab"
+                                  aria-selected={sort === id}
+                                  onClick={() => setSort(id)}
+                                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-accent ${
+                                    sort === id ? "bg-accent text-white shadow-sm" : "text-muted hover:text-ink"
+                                  }`}
+                                >
+                                  <Icon aria-hidden className="h-4 w-4" /> {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="p-3 md:p-0">
+                            <OfferList offers={offers} pending={pending} framed={false} />
+                          </div>
+                        </section>
+
+                        <div className="space-y-1.5 px-1 text-xs text-muted">
+                          {alts === undefined && running && <p>Looking for brands with the same salt…</p>}
+                          {alts === null && (
+                            <p className="flex items-center gap-1.5">
+                              <ShieldCheck className="h-3.5 w-3.5" /> We couldn&apos;t identify this medicine&apos;s salt, so no other brands are suggested.
                             </p>
-                          ))}
+                          )}
+                          {notSold.length > 0 && <p>Not sold online for this PIN right now: {notSold.join(", ")}.</p>}
+                          {alts && (
+                            <p className="flex items-center gap-1.5 font-medium text-[#854d0e]">
+                              <Stethoscope className="h-3.5 w-3.5" /> Same salt, strength and form. Ask your doctor or pharmacist before switching brands.
+                            </p>
+                          )}
+                        </div>
                       </>
                     )}
-                    <SwapSection result={state.alternatives} running={running} only={(a) => filter !== "free" || a.delivery_status === "free"} />
                   </>
                 )}
               </section>
@@ -157,7 +195,7 @@ export default function ShopView() {
           <div id="panel-rx" role="tabpanel" aria-labelledby="tab-rx" className="py-6">
             <h1 className="text-2xl font-semibold tracking-tight">Your prescription</h1>
             <p className="mt-1 text-sm text-muted">One medicine per line, e.g. &ldquo;Dolo 650 x30&rdquo;. We find the cheapest way to buy all of it.</p>
-            <PrescriptionForm items={rxItems} setItems={setRxItems} pincode={pincode} setPincode={setPincode} running={rxRunning} onSubmit={() => submitRx()} />
+            <PrescriptionForm colorKits items={rxItems} setItems={setRxItems} pincode={pincode} setPincode={setPincode} running={rxRunning} onSubmit={() => submitRx()} />
             {rx.state.status !== "idle" && (
               <div className="mt-8">
                 <Receipt rx={rx.state} onPick={pickRx} />

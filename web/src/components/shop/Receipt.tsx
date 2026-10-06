@@ -27,14 +27,15 @@ export default function Receipt({ rx, onPick }: { rx: PrescriptionState; onPick:
       {rx.error && <ErrorNote message={rx.error} />}
 
       {best && less > 0.005 && (
-        <p className="rounded-xl border border-hit/30 bg-hit/[0.07] px-4 py-3 text-sm">
-          <span className="tnum font-mono text-lg font-semibold text-hit">{inr(less)} less</span>{" "}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-bad/30 bg-bad/[0.06] px-4 py-3 text-sm">
+          <span className="rounded-md bg-bad px-2 py-0.5 text-xs font-extrabold uppercase tracking-wide text-white">Save</span>
+          <span className="tnum font-mono text-lg font-bold text-bad">{inr(less)}</span>
           <span className="text-ink">than buying exactly as prescribed ({inr(prescribed!.total)}).</span>{" "}
           <span className="text-muted">Swaps have the same salt, strength and form. Ask your doctor or pharmacist before switching brands.</span>
         </p>
       )}
 
-      <BasketCard basket={rx.basket} lines={rx.lines} items={rx.items} running={rx.status === "running"} onPick={onPick} />
+      <BasketCard variant="shop" basket={rx.basket} lines={rx.lines} items={rx.items} running={rx.status === "running"} onPick={onPick} />
     </section>
   );
 }

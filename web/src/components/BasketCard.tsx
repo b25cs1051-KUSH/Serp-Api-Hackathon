@@ -3,6 +3,7 @@
 import { AlertTriangle, Pill as PillIcon } from "lucide-react";
 import { type BasketResult, type RxItem, type RxLine } from "@/lib/api";
 import LineComparison from "./LineComparison";
+import MedicineSources from "./shop/MedicineSources";
 import { PLANS, PlanHeader, SwapNote } from "./PlanCards";
 import StoreOrders from "./StoreOrders";
 
@@ -13,7 +14,9 @@ export default function BasketCard({
   items,
   running,
   onPick,
+  variant = "engine",
 }: {
+  variant?: "engine" | "shop";
   basket: BasketResult | null;
   lines: Record<number, RxLine>;
   items: RxItem[];
@@ -58,7 +61,7 @@ export default function BasketCard({
         const plan = pick(basket);
         return (
           <section key={id} className="space-y-3">
-            <PlanHeader basket={basket} id={id} total={priced} />
+            <PlanHeader basket={basket} id={id} total={priced} variant={variant} />
             {plan && (
               <div className="border-l-2 border-line pl-3 md:pl-4">
                 <StoreOrders plan={plan} items={items} />
@@ -70,7 +73,7 @@ export default function BasketCard({
       <SwapNote basket={basket} />
       <p className="px-1 text-xs text-faint">&ldquo;Open&rdquo; opens one product page per click (pharmacies don&apos;t let other sites fill their carts); add the quantity shown.</p>
 
-      <LineComparison basket={basket} lines={lines} items={items} />
+      {variant === "shop" ? <MedicineSources lines={lines} items={items} /> : <LineComparison basket={basket} lines={lines} items={items} />}
 
       {basket.unavailable.length > 0 && (
         <div className="flex items-start gap-2 rounded-xl border border-miss/30 bg-miss/[0.07] px-4 py-3 text-sm text-miss">

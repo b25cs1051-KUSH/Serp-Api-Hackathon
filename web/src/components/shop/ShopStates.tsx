@@ -4,45 +4,6 @@ import { AlertTriangle, ClipboardList, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
 
-export type Filter = "cheapest" | "free" | "swaps" | "fastest";
-
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: "cheapest", label: "Cheapest delivered" },
-  { id: "free", label: "Free delivery" },
-  { id: "swaps", label: "Same-salt swaps" },
-  { id: "fastest", label: "Fastest delivery" },
-];
-
-export function FilterChips({ value, onChange }: { value: Filter; onChange: (f: Filter) => void }) {
-  return (
-    <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
-      {FILTERS.map((f) => (
-        <button
-          key={f.id}
-          type="button"
-          aria-pressed={value === f.id}
-          onClick={() => onChange(f.id)}
-          className={`rounded-full border px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-accent ${
-            value === f.id ? "border-accent bg-accent text-white" : "border-line bg-panel text-muted hover:text-ink"
-          }`}
-        >
-          {f.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Hours until delivery, from labels like "10-30 Mins / 1 Day", "Same Day / Store Pickup", "1-2 Days". */
-export function deliveryHours(days?: string): number {
-  if (!days) return 1e6;
-  const mins = days.match(/(\d+)(?:\s*-\s*\d+)?\s*min/i);
-  if (mins) return Number(mins[1]) / 60;
-  if (/same day/i.test(days)) return 8;
-  const d = days.match(/(\d+)(?:\s*-\s*\d+)?\s*day/i);
-  return d ? Number(d[1]) * 24 : 1e6;
-}
-
 export function EmptyState({ examples, onSearch, onPaste }: { examples: string[]; onSearch: (q: string) => void; onPaste: () => void }) {
   return (
     <section className="py-8">
