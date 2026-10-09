@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone", // self-contained server for the Docker image (web/Dockerfile)
+  // Render Static Sites export HTML; Docker keeps its standalone server.
+  output: process.env.NEXT_OUTPUT === "export" ? "export" : "standalone",
 };
 
 export default nextConfig;
