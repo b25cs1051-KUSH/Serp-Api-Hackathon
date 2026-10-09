@@ -1,7 +1,7 @@
 # Render Blueprint: PharmaWatch on Render's free plan (New → Blueprint → this repo).
 #   pharmawatch-cache  Key Value (Redis-compatible), 25 MB, internal only
 #   pharmawatch-api    FastAPI, api/Dockerfile.render (no PyTorch: ~180 MB idle, ~250 MB under load)
-#   serpapi-web-static Next.js static export; no instance hours or keep-awake job
+#   pharmawatch-static Next.js static export; no instance hours or keep-awake job
 # Keys are entered in the Render dashboard (sync: false); they are never in this file or an image.
 # Free web services sleep after 15 min idle; the first request after that takes about a minute.
 # The browser API URL is fixed at web build time. Cross-service references follow the
@@ -41,10 +41,10 @@ services:
       - key: MAX_CONCURRENT_SEARCHES  # free instances get a fraction of a CPU
         value: "3"
       - key: UI_ORIGINS
-        fromService: { type: web, name: serpapi-web-static, envVarKey: RENDER_EXTERNAL_URL }
+        fromService: { type: web, name: pharmawatch-static, envVarKey: RENDER_EXTERNAL_URL }
 
   - type: web
-    name: serpapi-web-static
+    name: pharmawatch-static
     runtime: static
     rootDir: web
     buildCommand: npm ci && npm run build
