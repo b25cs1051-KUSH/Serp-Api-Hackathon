@@ -1,7 +1,7 @@
 # PharmaWatch
 
 Type a medicine, or a whole prescription, and your PIN code. PharmaWatch shows what it actually costs
-**delivered to your door** from 10 Indian online pharmacies whose delivery fees we verified, finds **brands with the same composition**
+**delivered to your door** from 10 Indian online pharmacies (9 with verified delivery fees), finds **brands with the same composition**
 that are cheaper, and works out the **cheapest way to buy everything**, delivery fees included.
 
 ```
