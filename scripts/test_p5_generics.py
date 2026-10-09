@@ -280,8 +280,8 @@ def check_stamlo_pipeline() -> list:
                        row("Apollo Pharmacy", "Amlokind-5 Tablet 15's", 23.50, "t-amlokind-apollo"),
                        row("Apollo Pharmacy", "Amlokind-AT 5 mg/50 mg Tablet 15's", 61.0, "t-at"),
                        row("PharmEasy", "Stamlo 5Mg Strip Of 30 Tablets", 61.99, "t-stamlo-pe")],
-        "Amtas 5": [row("Kogland Commerce", "Amlopres 5 mg Tablet - Strip of 30", 66.11, "t-amlopres-kog")],
-        "Amlopres 5": [row("Magicine Pharma", "Amlopres 2.5 mg Tablet (15 Tab)", 25.23, "t-2.5")],
+        "Amtas 5": [row("SastaSundar", "Amlopres 5 mg Tablet - Strip of 30", 66.11, "t-amlopres-sasta")],
+        "Amlopres 5": [row("Netmeds", "Amlopres 2.5 mg Tablet (15 Tab)", 25.23, "t-2.5")],
     }
     requested = []
 
@@ -345,15 +345,15 @@ def check_stamlo_pipeline() -> list:
         check("Reference = Chemist180, pack estimated",
               (alt["reference"]["platform"], alt["reference"]["pack_size"], alt["reference"]["pack_estimated"]),
               ("Chemist180", 30, True)),
-        check("Cheaper: Amlopres @ Kogland, found via pooling (Amtas search)",
-              (cheaper.get("brand"), cheaper.get("platform")), ("Amlopres 5", "Kogland Commerce")),
-        check("Cheaper alt has its direct link", cheaper.get("direct_link"), "https://Kogland%20Commerce/t-amlopres-kog"),
+        check("Cheaper: Amlopres @ SastaSundar, found via pooling (Amtas search)",
+              (cheaper.get("brand"), cheaper.get("platform")), ("Amlopres 5", "SastaSundar")),
+        check("Cheaper alt has its direct link", cheaper.get("direct_link"), "https://SastaSundar/t-amlopres-sasta"),
         check("Not-cheaper alt: direct_link empty", by_brand.get("Amlokind 5", {}).get("direct_link"), ""),
         check("Amtas genuinely not found", alt["not_found"], ["Amtas 5"]),
-        check("Main links on all top rows", all(main_links.values()), True),
+        check("Main link on the top row only", [bool(v) for v in main_links.values()][:2], [True, False]),
         check("No link spent on look-alikes", sorted(t for t in requested if t in ("t-esta", "t-bis", "t-at")), []),
         check("Link lookups made", link_calls,
-              sorted(["t-stamlo-c180", "t-stamlo-apollo", "t-stamlo-pe", "t-amlopres-kog"])),
+              sorted(["t-stamlo-c180", "t-amlopres-sasta"])),
     ]
 
 

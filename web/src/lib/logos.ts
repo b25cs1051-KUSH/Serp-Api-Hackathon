@@ -4,7 +4,7 @@
  * everywhere; before one is seen, the pharmacy's site icon is used, then its initial.
  */
 
-/** Sites of the pharmacies PharmaWatch prices (pharmawatch/distiller.py PLATFORM_NAME_PATTERNS). */
+/** Sites of the pharmacies PharmaWatch prices (each platform's listing.domain in notes/postal_codes_delivery_rules.json). */
 const DOMAINS: Record<string, string> = {
   "1mg": "1mg.com",
   PharmEasy: "pharmeasy.in",
@@ -13,12 +13,8 @@ const DOMAINS: Record<string, string> = {
   "Apollo Pharmacy": "apollopharmacy.in",
   Medplus: "medplusmart.com",
   "Dawaa Dost": "dawaadost.com",
-  "Magicine Pharma": "magicinepharma.com",
   Chemist180: "chemist180.com",
-  eMedicalwala: "emedicalwala.com",
-  Medivik: "medivik.com",
   Medizinhub: "medizinhub.com",
-  "Kogland Commerce": "kogland.com",
   SastaSundar: "sastasundar.com",
 };
 

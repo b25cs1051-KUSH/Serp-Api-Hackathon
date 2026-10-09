@@ -93,8 +93,8 @@ async def search_medicine(
     pincode: Annotated[str, Field(max_length=20, description="6-digit Indian PIN code the medicine is delivered to, "
                                                              "e.g. '110001'. Delivery fees depend on it.")],
     ctx: Context,
-    resolve_links: Annotated[bool, Field(description="Resolve product pages for the top 5 listings and cheaper "
-                                                     "brands up front (up to ~8 extra credits). Prefer false and "
+    resolve_links: Annotated[bool, Field(description="Resolve product pages for the cheapest listing and the cheapest "
+                                                     "alternative up front (up to 2 extra credits). Prefer false and "
                                                      "get_buy_link for the listing the user picks.")] = False,
     response_format: ResponseFormat = "markdown",
 ) -> Annotated[CallToolResult, SearchOutput]:

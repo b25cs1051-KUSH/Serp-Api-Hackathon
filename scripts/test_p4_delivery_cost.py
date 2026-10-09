@@ -39,23 +39,18 @@ def run_checks() -> bool:
         check("1mg gap to free", q("1mg", 470, "110001")["amount_to_free_delivery"], 30.0),
         check("Quantity counts toward threshold", q("1mg", 250, "110001", quantity=2)["delivery_status"], "free"),
         check("Landed = qty×price + fee", q("1mg", 150, "400001", quantity=2)["total_landed_cost"], 350.0),
-        check("Weight-based fee shown as estimate", q("eMedicalwala", 100, "110001")["delivery_label"],
-              "~₹50 delivery (weight-based estimate) · add ₹200 more for FREE delivery"),
         # Slabs (Netmeds metro)
         check("Netmeds ₹200 → ₹59", q("Netmeds", 200, "110001")["delivery_fee"], 59.0),
         check("Netmeds ₹300 → ₹29", q("Netmeds", 300, "110001")["delivery_fee"], 29.0),
         check("Netmeds ₹500 → free", q("Netmeds", 500, "110001")["delivery_label"], "FREE delivery (order ≥ ₹500)"),
         check("Netmeds tier3 same slabs", q("Netmeds", 300, "250001")["delivery_fee"], 29.0),
-        check("Magicine ₹4000 prepaid slab", q("Magicine Pharma", 4000, "110001")["delivery_label"],
-              "₹69 delivery (prepaid only) · no free-delivery offer"),
         check("Apollo below ₹199 points at the cheaper slab", q("Apollo", 108, "110001")["delivery_label"],
               "₹93.22 delivery (₹79 + GST) · add ₹91 more to pay ₹7.08"),
         check("Apollo from ₹199: free delivery, fee named", q("Apollo", 216.5, "110001")["delivery_label"],
               "FREE delivery · ₹7.08 platform fee + GST"),
-        check("Magicine small order points at the next slab", q("Magicine Pharma", 100, "110001")["delivery_label"],
-              "₹119 delivery · add ₹1,200 more to pay ₹99"),
         # Platform fee
-        check("Truemeds ₹11 platform fee", q("Truemeds", 100, "110001")["total_landed_cost"], 160.0),
+        check("Truemeds ₹109 below ₹200 + ₹11 charges", q("Truemeds", 100, "110001")["total_landed_cost"], 220.0),
+        check("Truemeds free from ₹200, ₹11 still charged", q("Truemeds", 200, "110044")["total_landed_cost"], 211.0),
         # Always-free, pickup, unserviceable, unknown
         check("Chemist180 ₹100 below ₹1,000", q("Chemist180", 999, "110001")["delivery_fee"], 100.0),
         check("Chemist180 free from ₹1,000", q("Chemist180", 1000, "781001")["delivery_label"], "FREE delivery (order ≥ ₹1,000)"),
@@ -68,9 +63,10 @@ def run_checks() -> bool:
         check("Apollo ₹264 cart = ₹271.08 to pay", q("Apollo", 264, "110001")["total_landed_cost"], 271.08),
         check("Medplus tier3 pickup only", q("Medplus", 100, "250001")["delivery_status"], "pickup_only"),
         check("Andaman unserviceable", q("1mg", 500, "744101")["total_landed_cost"], None),
-        check("Kogland remote fee unpublished", q("Kogland", 100, "190001")["delivery_status"], "unknown"),
+        check("Medizinhub ₹50 below ₹2,000", q("Medizinhub", 100, "250001")["delivery_fee"], 50.0),
+        check("Medizinhub free from ₹2,000", q("Medizinhub", 2000, "110001")["delivery_status"], "free"),
         check("Unknown store not guessed", q("RandomShop", 100, "110001")["delivery_fee"], None),
-        check("Medivik tier2 typo fixed", q("Medivik", 100, "160001")["delivery_fee"], 45.0),
+        check("Removed unverified store not priced", q("Kogland Commerce", 100, "110001")["delivery_fee"], None),
     ]
 
     try:

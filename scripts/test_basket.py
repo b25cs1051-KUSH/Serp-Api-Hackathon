@@ -60,14 +60,14 @@ def brute_force(lines):
 
 def run():
     # 1. Free-delivery threshold: both at 1mg (₹500, free from ₹500) beats the per-item cheapest
-    #    (both at Truemeds ₹470 + ₹49 delivery + ₹11 platform fee = ₹530).
-    r = basket.optimise([line("A", offer("Truemeds", 235), offer("1mg", 250)),
-                         line("B", offer("Truemeds", 235), offer("1mg", 250))], PIN)
+    #    (each alone is cheaper at Dawaa Dost, ₹245 + ₹50 = ₹295 vs ₹300; both there: ₹490 + ₹50 = ₹540).
+    r = basket.optimise([line("A", offer("Dawaa Dost", 245), offer("1mg", 250)),
+                         line("B", offer("Dawaa Dost", 245), offer("1mg", 250))], PIN)
     best = r["with_swaps"]["best"]
     check("threshold: one 1mg order beats the split", (best["total"], stores(best)), (500.0, [("1mg", [0, 1])]))
     check("threshold: per-line cheapest alone is still reported",
           (r["per_line"][0]["cheapest_any"]["platform"], r["per_line"][1]["cheapest_any"]["platform"]),
-          ("Truemeds", "Truemeds"))
+          ("Dawaa Dost", "Dawaa Dost"))
     check("single store = the same 1mg order here", r["with_swaps"]["single_store"]["total"], 500.0)
 
     # 2. Small order, no threshold reached: the lower fee beats cheaper items.

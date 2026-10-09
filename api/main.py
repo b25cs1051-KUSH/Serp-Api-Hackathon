@@ -865,10 +865,11 @@ def cache_entries():
 # ─────────────────────────────────────────────
 # MCP over Streamable HTTP at /mcp: the public connector (pharmawatch_mcp/remote.py).
 # Same process as the website's API, so one cache, one credit budget and one link registry.
-# MCP_HTTP=0 turns it off; without the mcp package the API runs as before.
+# MCP_HTTP=0 turns it off; without the mcp package the API runs as before. When the pharmawatch_mcp
+# package is being imported first (the stdio server, which imports this module), there is nothing to mount.
 # ─────────────────────────────────────────────
 
-if os.getenv("MCP_HTTP", "1") != "0":
+if os.getenv("MCP_HTTP", "1") != "0" and "pharmawatch_mcp" not in sys.modules:
     try:
         from pharmawatch_mcp.remote import attach as _attach_mcp
     except ImportError as e:

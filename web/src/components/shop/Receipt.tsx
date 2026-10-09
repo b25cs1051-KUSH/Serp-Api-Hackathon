@@ -20,7 +20,7 @@ export default function Receipt({ rx, onPick }: { rx: PrescriptionState; onPick:
         <h2 id="receipt-title" className="text-2xl font-semibold tracking-tight">Your cheapest basket</h2>
         <p className="mt-1 text-sm text-muted">
           {rx.items.length} medicine{rx.items.length === 1 ? "" : "s"}, delivered to {rx.pincode}
-          {rx.status === "running" && " · comparing pharmacies…"}
+          {rx.status === "running" && (rx.waking ? " · getting ready to compare prices…" : " · comparing pharmacies…")}
         </p>
       </div>
 

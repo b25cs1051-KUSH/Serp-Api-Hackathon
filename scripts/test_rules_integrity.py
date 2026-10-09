@@ -23,9 +23,10 @@ from pharmawatch.delivery_cost import (  # noqa: E402
     calculate_delivery_cost as q,
     load_delivery_rules,
     lookup_zone,
+    platform_listings,
     resolve_platform_key,
 )
-from pharmawatch.distiller import PLATFORM_NAME_PATTERNS  # noqa: E402
+from pharmawatch.distiller import identify_platform, platform_info  # noqa: E402
 
 ZONE_PIN = {"metro": "110001", "tier2": "226001", "tier3": "250002", "remote": "781001", "unserviceable": "744101"}
 results = []
@@ -92,13 +93,25 @@ def invariants():
 
 
 def coverage():
-    print("\nEvery recognised store has delivery rules")
-    unpriced = [name for _, name in PLATFORM_NAME_PATTERNS if resolve_platform_key(name) is None]
-    check("distiller stores without rules", unpriced, [])
-    for _, name in PLATFORM_NAME_PATTERNS:
-        r = q(name, 100, "110001")
+    print("\nEvery pharmacy in the rules file is recognised and priced")
+    listings = platform_listings()
+    check("one listing entry per platform", [p["key"] for p in listings], list(load_delivery_rules()["platforms"]))
+    check("listing names unique", len({p["name"] for p in listings}), len(listings))
+    check("every platform has match needles and a domain", [p["key"] for p in listings if not p["match"] or not p["domain"]], [])
+    check("seller name → its own platform", [p["key"] for p in listings if identify_platform(p["name"], "") != p["name"]], [])
+    check("domain alone → its own platform",
+          [p["key"] for p in listings if identify_platform("", f"https://www.{p['domain']}/x") != p["name"]], [])
+    check("listing name → its own rules key", [p["key"] for p in listings if resolve_platform_key(p["name"]) != p["key"]], [])
+    check("store search pages take the medicine",
+          [p["key"] for p in listings if p["store_search_url"] and "{query}" not in p["store_search_url"]], [])
+    check("unknown seller dropped", identify_platform("Amazon.in", "https://www.amazon.in/x"), None)
+    check("Google link text never names the store",
+          identify_platform("Some Shop", "https://www.google.com/search?q=amlodipine+generic+chemist180"), None)
+    check("platform_info by name", platform_info("Apollo Pharmacy").get("domain"), "apollopharmacy.in")
+    for p in listings:
+        r = q(p["name"], 100, "110001")
         if r["delivery_status"] == "unknown":
-            print(f"        note: {name} has no published fee in metro ({r['delivery_label']})")
+            print(f"        note: {p['name']} has no published fee in metro ({r['delivery_label']})")
 
 
 def pins_and_quantity():

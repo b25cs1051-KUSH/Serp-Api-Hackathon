@@ -3,14 +3,14 @@ pipeline.py — One user search, run in parallel, results streamed as they're re
 
     t=0  resolve "Stamlo 5" in the medicine index (local, ~1 ms): Amlodipine 5mg tablet, 281 brands
          ├─ "paracetamol" (no strength)? → ("choose", strengths) and stop: nothing is spent
-         └─ main search "Stamlo 5" ─▶ ("main", only real Stamlo 5 listings) ─▶ direct links of top 5 ─┐
+         └─ main search "Stamlo 5" ─▶ ("main", only real Stamlo 5 listings) ─▶ direct link of the top 1 ─┐
               └─ then one more search in the same salt: "Amlodipine 5mg" ─▶ pool ────────────┐       │
                  (for a salt search: the brand with the widest maker range)                   │       │
                                                                                               │       │
                   ├▶ ("main_update", main list + Stamlo 5 listings found in the other searches) ◀┤      │
                   └▶ every brand of the composition found anywhere → compare → direct links of  │      │
                      cheaper ones ─▶ ("alternatives", …)                                       ◀┘      │
-                                              final top 5 all have their links ─▶ ("main_links", …) ◀─┘
+                                                 final top 1 has its link     ─▶ ("main_links", …) ◀─┘
 
 Events arrive in whatever order they finish; "alternatives" never waits for the main direct links.
 
@@ -50,8 +50,10 @@ from pharmawatch.medicines import resolve
 from pharmawatch.search import get_direct_merchant_link
 from serpapi_cache import call_tag
 
-MAIN_DIRECT_LINKS = 5
-ALT_DIRECT_LINKS = 3   # cheapest alternatives that get their product page (1 credit each)
+# Product pages resolved up front (1 credit each): the cheapest main listing and the cheapest alternative, the
+# offers most often opened. Every other listing carries a link_id and is resolved on click (api /api/link).
+MAIN_DIRECT_LINKS = 1
+ALT_DIRECT_LINKS = 1
 
 # main search + Gemini + 3 substitutes + direct links, with headroom for overlapping users.
 _POOL = ThreadPoolExecutor(max_workers=16, thread_name_prefix="pharmawatch")
@@ -270,7 +272,7 @@ def search_medicine_stream(
                 alt_result["timings"] = dict(timings)
             yield "alternatives", alt_result
 
-        # ── Main links: once the main list is final and its top 5 are resolved ──
+        # ── Main links: once the main list is final and its top MAIN_DIRECT_LINKS are resolved ──
         top = main_rows[:MAIN_DIRECT_LINKS]
         if pooled_done and not sent_main_links and links.ready(top):
             sent_main_links = True

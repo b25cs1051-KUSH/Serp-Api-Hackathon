@@ -1,7 +1,7 @@
 # Render Blueprint: PharmaWatch on Render's free plan (New → Blueprint → this repo).
 #   pharmawatch-cache  Key Value (Redis-compatible), 25 MB, internal only
 #   pharmawatch-api    FastAPI, api/Dockerfile.render (no PyTorch: ~180 MB idle, ~250 MB under load)
-#   serpapi-web        Next.js standalone server built with web/Dockerfile
+#   pharmawatch-static Next.js static export; no instance hours or keep-awake job
 # Keys are entered in the Render dashboard (sync: false); they are never in this file or an image.
 # Free web services sleep after 15 min idle; the first request after that takes about a minute.
 # The browser API URL is fixed at web build time. Cross-service references follow the
@@ -36,22 +36,37 @@ services:
         sync: false
       - key: SERPAPI_ROTATE_KEYS      # key 1 out of searches → key 2
         value: "1"
-      - key: DAILY_CREDIT_BUDGET      # SerpApi calls per UTC day; a new medicine costs about 4
-        value: "30"
+      - key: DAILY_CREDIT_BUDGET      # 0 disables the app's daily cap; SerpApi account quota still applies
+        value: "0"
       - key: MAX_CONCURRENT_SEARCHES  # free instances get a fraction of a CPU
         value: "3"
       - key: UI_ORIGINS
-        fromService: { type: web, name: serpapi-web, envVarKey: RENDER_EXTERNAL_URL }
+        fromService: { type: web, name: pharmawatch-static, envVarKey: RENDER_EXTERNAL_URL }
 
   - type: web
-    name: serpapi-web
-    runtime: docker
-    plan: free
-    region: singapore
+    name: pharmawatch-static
+    runtime: static
     rootDir: web
-    dockerContext: .
-    dockerfilePath: ./Dockerfile
-    healthCheckPath: /
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./out
     envVars:
-      - key: NEXT_PUBLIC_API_URL      # read by the browser, fixed at build time
+      - key: NEXT_OUTPUT
+        value: export
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+      - key: NEXT_PUBLIC_API_URL
         fromService: { type: web, name: pharmawatch-api, envVarKey: RENDER_EXTERNAL_URL }
+    # Direct links serve their own exported route, including legacy /shop.
+    routes:
+      - type: rewrite
+        source: /engine
+        destination: /engine.html
+      - type: rewrite
+        source: /engine/
+        destination: /engine.html
+      - type: rewrite
+        source: /shop
+        destination: /shop.html
+      - type: rewrite
+        source: /shop/
+        destination: /shop.html
