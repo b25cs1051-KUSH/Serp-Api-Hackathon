@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
+import WakeApi from "@/components/shell/WakeApi";
 
 const sans = Schibsted_Grotesk({ variable: "--font-ui", subsets: ["latin"] });
 const mono = IBM_Plex_Mono({ variable: "--font-code", subsets: ["latin"], weight: ["400", "500", "600"] });
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col"><WakeApi />{children}</body>
     </html>
   );
 }

@@ -16,7 +16,7 @@ import { buildOffers, byPrice, bySpeed } from "@/lib/offers";
 import { usePrescription } from "@/lib/usePrescription";
 import { useSearch } from "@/lib/useSearch";
 
-/** Medicines cached on the price engine at the time of writing (0 credits to search). */
+/** Popular examples; cache contents and available credits change over time. */
 const EXAMPLES = ["Atorbest 10", "Stamlo 5", "Dolo 650", "Telma 40", "Pan 40"];
 
 /** The shop: one medicine or a whole prescription, priced delivered to the PIN. No calls, credits or cache here. */
@@ -141,7 +141,7 @@ export default function ShopView() {
                       </p>
                     )}
                     {state.listings === null ? (
-                      state.status === "running" && <LoadingCards />
+                      state.status === "running" && <LoadingCards waking={state.waking} />
                     ) : listings.length === 0 ? (
                       <p className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
                         No listing is exactly {state.query}. Look-alike products were left out on purpose.

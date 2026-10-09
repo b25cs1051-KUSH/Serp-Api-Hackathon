@@ -36,8 +36,8 @@ services:
         sync: false
       - key: SERPAPI_ROTATE_KEYS      # key 1 out of searches → key 2
         value: "1"
-      - key: DAILY_CREDIT_BUDGET      # SerpApi calls per UTC day; a new medicine costs about 4
-        value: "30"
+      - key: DAILY_CREDIT_BUDGET      # 0 disables the app's daily cap; SerpApi account quota still applies
+        value: "0"
       - key: MAX_CONCURRENT_SEARCHES  # free instances get a fraction of a CPU
         value: "3"
       - key: UI_ORIGINS
