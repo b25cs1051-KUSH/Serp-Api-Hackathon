@@ -33,24 +33,6 @@ ZONE_PRIORITY = ["unserviceable", "metro", "tier2", "remote", "tier3"]
 # Fees for these fee_types depend on parcel weight, so the published fee is an estimate.
 ESTIMATED_FEE_TYPES = {"weight_and_value_based", "volumetric_weight_b2b"}
 
-# Substring (lowercase, alphanumerics only) of a distiller platform name → rules key.
-PLATFORM_ALIASES: List[Tuple[str, str]] = [
-    ("1mg", "tata_1mg"),
-    ("pharmeasy", "pharmeasy"),
-    ("apollo", "apollo_247"),
-    ("netmeds", "netmeds"),
-    ("truemeds", "truemeds"),
-    ("medplus", "medplus_mart"),
-    ("dawaadost", "dawaadost"),
-    ("magicine", "magicine_pharma"),
-    ("chemist180", "chemist180"),
-    ("emedicalwala", "emedicalwala"),
-    ("medivik", "medivik"),
-    ("medizinhub", "medizinhub"),
-    ("kogland", "kogland_commerce"),
-    ("sastasundar", "sastasundar"),
-]
-
 _PIN_RE = re.compile(r"^[1-9]\d{5}$")
 
 
@@ -59,6 +41,30 @@ def load_delivery_rules() -> dict:
     """Load delivery rules JSON once. Raises if the file is missing — never silently fakes fees."""
     with open(RULES_JSON_PATH, "r", encoding="utf-8-sig") as f:
         return json.load(f)
+
+
+def squash(text: str) -> str:
+    """Lowercase letters and digits only: 'Apollo 24|7' → 'apollo247'."""
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+@lru_cache(maxsize=1)
+def platform_listings() -> List[dict]:
+    """
+    The pharmacies whose listings are kept, in rules-file order: {key, name, match, domain, store_search_url}.
+    The rules file is the only list of pharmacies: adding one there (fees + "listing") is all it takes.
+    """
+    out = []
+    for key, p in load_delivery_rules()["platforms"].items():
+        listing = p.get("listing") or {}
+        out.append({
+            "key": key,
+            "name": listing.get("name") or p.get("display_name") or key,
+            "match": [squash(m) for m in listing.get("match") or [key] if squash(m)],
+            "domain": listing.get("domain") or "",
+            "store_search_url": listing.get("store_search_url") or "",
+        })
+    return out
 
 
 @lru_cache(maxsize=1)
@@ -102,15 +108,14 @@ def get_pincode_zone(pincode) -> str:
 
 def resolve_platform_key(platform_name: str) -> Optional[str]:
     """Map a distiller platform name ("1mg", "Apollo Pharmacy", "Tata 1mg") to its rules key."""
-    clean = re.sub(r"[^a-z0-9]", "", (platform_name or "").lower())
+    clean = squash(platform_name)
     if not clean:
         return None
-    platforms = load_delivery_rules()["platforms"]
-    if clean in platforms:
+    if clean in load_delivery_rules()["platforms"]:
         return clean
-    for needle, key in PLATFORM_ALIASES:
-        if needle in clean:
-            return key
+    for p in platform_listings():
+        if clean == squash(p["name"]) or any(needle in clean for needle in p["match"]):
+            return p["key"]
     return None
 
 

@@ -47,7 +47,7 @@ Everything after the first step runs in parallel. Results reach the browser as e
       │   ("paracetamol" without a strength → the user picks one first; nothing is searched)
       │
       └─ Google Shopping: "Stamlo 5 price" ──▶ main list (only real Stamlo 5 listings)
-            │                                 └─▶ product page links for the top 5 (parallel)
+            │                                 └─▶ product page link for the cheapest (parallel)
             │
             ├─ "Amlodipine 5mg tablet generic" ─┐  pool all 3 searches
             └─ "Amlopres 5" (Cipla)            ─┴▶ every brand of the salt found anywhere,
@@ -76,7 +76,8 @@ Everything after the first step runs in parallel. Results reach the browser as e
 5. **Comparison.** Per-tablet price, delivery included. Missing pack sizes are estimated from the
    brand's other listings, then from its usual pack in the index, and flagged.
 6. **Direct links.** Resolving a listing to the pharmacy's own product page costs a SerpApi call, so it
-   is done only for the top 5 main listings and for alternatives that are actually cheaper.
+   is done up front only for the cheapest main listing and the cheapest alternative; any other listing
+   is resolved when it is clicked (1 credit, then cached for 24 h).
 
 The browser receives four events: `main`, `main_update` (only if pooling found more listings),
 `alternatives` and `main_links`, in whatever order they finish, or a single `choose` event when the
@@ -392,12 +393,13 @@ them, and naming the brand ("Amlokind AT chemist180") finds only the brand itsel
 | Chemist180 generic search | 0–1 | "Amlodipine 5mg tablet generic chemist180"; single-salt medicines only |
 | Brand retry | 0–1 | Only when Google's answer to a brand has none of it ("Pan 40" → "Pan 40 tablet") |
 | Discounted-generic brand | 1 | The Cipla brand of the salt with the largest family ("Paracip 650"); for a salt search without one, the brand with the widest maker range |
-| Product-page links, main list | up to 5 | Only the top 5 real matches, only when links are on |
-| Product-page links, alternatives | 0–3 | The 3 cheapest alternatives that beat the searched brand |
+| Product-page link, main list | 0–1 | The cheapest real match, only when links are on |
+| Product-page link, alternatives | 0–1 | The cheapest alternative that beats the searched brand |
+| Product page on click | 1 per listing | Any other listing, when its Visit site is clicked; then cached 24 h |
 | Gemini | 0 SerpApi credits | Only for misspellings with several possible readings, then cached |
 | A search without a strength ("paracetamol") | 0 | The user picks a strength first |
 
-A new medicine costs at most 12 credits, and **4** with links off (3 for a combination). Repeating it within 24 hours
+A new medicine costs at most 7 credits, and **4** with links off (3 for a combination; +1 when the brand retry runs). Repeating it within 24 hours
 costs **0**, and a later search that shares a salt reuses the cached searches. A prescription costs
 the sum of its new medicines, with links resolved only for the offers the basket picked.
 
@@ -695,11 +697,13 @@ docker-compose.yml      Redis + API + UI, with healthchecks (api/Dockerfile, web
   but cannot invent listings.
 - **Estimated pack sizes are estimates.** They are always flagged; a pharmacy selling an unusual pack
   can still be misread.
-- **Dataset age and gaps.** The dataset is a snapshot. Brands launched after it (for example Siglinu 50)
-  are not recognised in titles, so they are left out rather than guessed. A medicine the index doesn't
-  know still gets prices, but no alternatives.
-- **Two salts per product.** The dataset stores at most two salts, so a three-salt combination is keyed
-  on two. Titles still go through the combination guards (variant letters, second doses).
+- **Medicine data: where we go next.** Today's catalogue is a 2024 snapshot of 246,046 products that stores
+  up to two salts per product. Brands launched since (for example Siglinu 50) are left out rather than
+  guessed, and a medicine the index doesn't know still gets prices, just no alternatives. After the
+  hackathon we will work with doctors and pharmacists to grow and verify this catalogue: refresh it
+  regularly, add full multi-salt compositions, and have clinicians review which brands count as
+  interchangeable. Every improvement there makes each search stronger, because the catalogue is what
+  decides an alternative.
 - **Google decides which brands appear.** Alternatives are the same-salt brands Google Shopping lists
   for our searches. A cheap brand that Google doesn't show for them is not compared; combination
   generics are the weakest case (4 of the 5 misses in the reference check).

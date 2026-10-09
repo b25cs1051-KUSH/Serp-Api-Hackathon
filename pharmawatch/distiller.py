@@ -14,24 +14,7 @@ Extracts:
 import re
 from typing import Dict, List, Optional
 
-# Domains and name patterns for recognized Indian pharma platforms
-TARGET_PHARMA_DOMAINS = [
-    "1mg.com",
-    "pharmeasy.in",
-    "netmeds.com",
-    "apollopharmacy.in",
-    "apollo247.com",
-    "medplusmart.com",
-]
-
-TARGET_PHARMA_NAMES = [
-    "1mg",
-    "pharmeasy",
-    "netmeds",
-    "apollo",
-    "apollo247",
-    "medplus",
-]
+from pharmawatch.delivery_cost import platform_listings, squash
 
 
 def parse_price_inr(price_str: Optional[str]) -> Optional[float]:
@@ -63,41 +46,17 @@ def identify_platform(source: str, link: str) -> Optional[str]:
     our own query text ('... generic chemist180 price', 'Glimepiride 1mg'), which must never name the store.
     """
     for text in (source, urllib.parse.urlsplit(link or "").netloc):
-        squashed = re.sub(r"[^a-z0-9]", "", (text or "").lower())
-        for needle, name in PLATFORM_NAME_PATTERNS:
-            if needle in squashed:
-                return name
+        squashed = squash(text)
+        for p in platform_listings():
+            if any(needle in squashed for needle in p["match"]):
+                return p["name"]
 
     return None
 
 
-# Every platform with delivery rules in notes/postal_codes_delivery_rules.json.
-# Needles are matched against source + link, lowercased with non-alphanumerics removed.
-PLATFORM_NAME_PATTERNS = [
-    ("1mg", "1mg"),
-    ("pharmeasy", "PharmEasy"),
-    ("netmeds", "Netmeds"),
-    ("truemeds", "Truemeds"),
-    ("apollo", "Apollo Pharmacy"),
-    ("medplus", "Medplus"),
-    ("dawaadost", "Dawaa Dost"),
-    ("magicine", "Magicine Pharma"),
-    ("chemist180", "Chemist180"),
-    ("emedicalwala", "eMedicalwala"),
-    ("medivik", "Medivik"),
-    ("medizinhub", "Medizinhub"),
-    ("kogland", "Kogland Commerce"),
-    ("sastasundar", "SastaSundar"),
-]
-
-
-PLATFORM_DOMAIN_MAP = {
-    "1mg": "1mg.com",
-    "PharmEasy": "pharmeasy.in",
-    "Netmeds": "netmeds.com",
-    "Apollo Pharmacy": "apollopharmacy.in",
-    "Medplus": "medplusmart.com",
-}
+def platform_info(name: str) -> dict:
+    """The rules-file listing entry for a platform name from identify_platform, or {}."""
+    return next((p for p in platform_listings() if p["name"] == name), {})
 
 
 import urllib.parse
@@ -112,28 +71,19 @@ def sanitize_link(url: str) -> str:
     return urllib.parse.quote(url.strip(), safe=":/%?=#&+-@._~")
 
 
-DIRECT_STORE_SEARCH_TEMPLATES = {
-    "1mg": "https://www.1mg.com/search/all?name={query}",
-    "PharmEasy": "https://pharmeasy.in/search/all?name={query}",
-    "Netmeds": "https://www.netmeds.com/catalogsearch/result/{query}/all",
-    "Apollo Pharmacy": "https://www.apollopharmacy.in/search-medicines/{query}",
-}
-
-
 def build_direct_store_link(platform: str, medicine_name: str, raw_link: str) -> str:
 
     """
-    Construct direct merchant store link (1mg, PharmEasy, Netmeds, Apollo, Medplus)
-    so clicking 'Visit Site' lands directly on the pharmacy store website rather than Google Shopping.
+    The listing's own link; for a Google Shopping link, the pharmacy's own search page when the rules file
+    gives one (store_search_url), so 'Visit Site' lands on the pharmacy rather than Google Shopping.
     """
     if raw_link and not "google.co.in/search" in raw_link and not "google.com/search" in raw_link:
         return sanitize_link(raw_link)
 
     query_encoded = urllib.parse.quote(medicine_name.strip())
-    platform_key = (platform or "").strip()
-
-    if platform_key in DIRECT_STORE_SEARCH_TEMPLATES:
-        return DIRECT_STORE_SEARCH_TEMPLATES[platform_key].format(query=query_encoded)
+    template = platform_info((platform or "").strip()).get("store_search_url")
+    if template:
+        return template.format(query=query_encoded)
 
     return sanitize_link(raw_link)
 
@@ -198,7 +148,7 @@ def distill_shopping_results(raw_json: dict, filter_known_platforms: bool = True
         thumbnail = item.get("thumbnail") or item.get("serpapi_thumbnail") or ""
         platform_logo = item.get("source_icon") or ""
         platform_name = platform or source or "Unknown"
-        platform_domain = PLATFORM_DOMAIN_MAP.get(platform_name, "")
+        platform_domain = platform_info(platform_name).get("domain", "")
         page_token = item.get("immersive_product_page_token") or ""
         search_link = build_direct_store_link(platform_name, title, raw_link)
 
