@@ -19,9 +19,10 @@ export function EmptyState({ onPaste }: { onPaste: () => void }) {
   );
 }
 
-export function LoadingCards() {
+export function LoadingCards({ waking = false }: { waking?: boolean }) {
   return (
     <div className="space-y-3" aria-busy="true" aria-label="Finding prices">
+      {waking && <p role="status" className="text-sm text-muted">Getting ready to compare prices…</p>}
       <div className="h-44 rounded-xl shimmer" />
       <div className="h-24 rounded-xl shimmer" />
       <div className="h-24 rounded-xl shimmer" />
@@ -53,7 +54,7 @@ export function ErrorNote({ message }: { message: string }) {
   }, [asleep]);
 
   if (/budget/i.test(message)) {
-    return <Note tone="warn">Today&apos;s demo search budget is used up. Medicines already searched today still work.</Note>;
+    return <Note tone="warn">Today&apos;s search allowance is used up. Fully cached comparisons can still work; new lookups resume at 5:30 AM IST.</Note>;
   }
   if (asleep) {
     return awake ? (

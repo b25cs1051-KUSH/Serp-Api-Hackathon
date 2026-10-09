@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { API_URL, type AltResult, type ChooseOptions, type Call, type DoneSummary, type Listing } from "./api";
+import { waitForApiReady } from "./apiReady";
 
 export type Stage = { name: string; at_ms: number };
 
 export interface SearchState {
   status: "idle" | "running" | "done" | "error";
+  waking: boolean;
   query: string;
   pincode: string;
   links: boolean;
@@ -23,6 +25,7 @@ export interface SearchState {
 
 const initial: SearchState = {
   status: "idle",
+  waking: false,
   query: "",
   pincode: "",
   links: true,
@@ -41,11 +44,29 @@ const initial: SearchState = {
 export function useSearch(onFinished?: () => void) {
   const [state, setState] = useState<SearchState>(initial);
   const esRef = useRef<EventSource | null>(null);
+  const pendingRef = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    pendingRef.current?.abort();
+    esRef.current?.close();
+  }, []);
 
   const run = useCallback(
-    (query: string, pincode: string, links: boolean) => {
+    async (query: string, pincode: string, links: boolean) => {
+      pendingRef.current?.abort();
       esRef.current?.close();
-      setState({ ...initial, status: "running", query, pincode, links, startedAt: performance.now() });
+      const controller = new AbortController();
+      pendingRef.current = controller;
+      setState({ ...initial, status: "running", waking: true, query, pincode, links, startedAt: performance.now() });
+      try {
+        await waitForApiReady({ signal: controller.signal });
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setState((s) => ({ ...s, status: "error", waking: false, error: (error as Error).message }));
+        }
+        return;
+      }
+      if (controller.signal.aborted) return;
+      setState((s) => ({ ...s, waking: false }));
 
       const url = `${API_URL}/api/search/stream?q=${encodeURIComponent(query)}&pincode=${encodeURIComponent(pincode)}&links=${links}`;
       const es = new EventSource(url);
@@ -53,6 +74,7 @@ export function useSearch(onFinished?: () => void) {
 
       const on = <T,>(name: string, fn: (data: T) => void) =>
         es.addEventListener(name, (e) => {
+          if (controller.signal.aborted) return;
           const data = (e as MessageEvent).data; // the built-in "error" event (network) has no data
           if (typeof data === "string") fn(JSON.parse(data));
         });
@@ -94,6 +116,7 @@ export function useSearch(onFinished?: () => void) {
       };
 
       es.onerror = () => {
+        if (controller.signal.aborted) return;
         // Network error, rejected request (422/429) or server closed early. Never let EventSource
         // reconnect: a reconnect re-runs the search and can spend credits.
         if (es.readyState !== EventSource.CLOSED) es.close();
