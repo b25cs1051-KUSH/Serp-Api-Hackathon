@@ -5,7 +5,7 @@ one credit budget, one link registry for get_buy_link).
 
 Stateless mode: every request is independent, so a restart or a second instance never breaks a client.
 
-    MCP_ALLOWED_HOSTS=pharmawatch-api-zmwy.onrender.com   Host headers accepted (DNS-rebinding protection);
+    MCP_ALLOWED_HOSTS=pharmawatch-api-7wm1.onrender.com   Host headers accepted (DNS-rebinding protection);
                                                           unset = no Host check (local development)
 """
 

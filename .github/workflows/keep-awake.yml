@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Ping the API health endpoint
         env:
-          API_URL: ${{ vars.API_URL || 'https://pharmawatch-api-zmwy.onrender.com' }}
+          API_URL: ${{ vars.API_URL || 'https://pharmawatch-api-7wm1.onrender.com' }}
         run: |
           for attempt in 1 2 3; do
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$API_URL/api/health") || code=000

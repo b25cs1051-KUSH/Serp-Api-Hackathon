@@ -11,7 +11,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://pharmawatch-api-zmwy.onrender.com/mcp"
+      "url": "https://pharmawatch-api-7wm1.onrender.com/mcp"
     }
   ]
 }

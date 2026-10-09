@@ -529,7 +529,7 @@ browser `EventSource` can't read an HTTP error body.
 
 PharmaWatch is an [MCP](https://modelcontextprotocol.io) server, built on the official Python SDK, in two ways:
 
-- **Public connector, nothing to install:** `https://pharmawatch-api-zmwy.onrender.com/mcp` (Streamable HTTP),
+- **Public connector, nothing to install:** `https://pharmawatch-api-7wm1.onrender.com/mcp` (Streamable HTTP),
   served by the same process as the website's API. `server.json` describes it for the official MCP Registry as
   `io.github.b25cs1051-KUSH/pharmawatch`.
 - **Local, over stdio:** `python mcp_server.py`, for Claude Desktop, Cursor and MCP Inspector with your own keys.
@@ -577,12 +577,12 @@ Design choices:
 Nothing to install, no account with us, no keys: the connector runs on our server and uses our SerpApi key.
 
 - **Claude** (claude.ai, Claude Desktop or the mobile app; Free, Pro, Max): Customize → Connectors → **+** →
-  **Add custom connector**. Name it PharmaWatch, paste `https://pharmawatch-api-zmwy.onrender.com/mcp`, leave
+  **Add custom connector**. Name it PharmaWatch, paste `https://pharmawatch-api-7wm1.onrender.com/mcp`, leave
   OAuth empty, click **Add**. Then, in a chat, turn it on from **+** → Connectors and ask, for example: *"Cheapest
   way to buy Dolo 650 × 30, Stamlo 5 and Atorbest 10 delivered to 382010?"* Free accounts can add one custom
   connector. On Team and Enterprise an owner adds it for the organisation first.
 - **Cursor** (`~/.cursor/mcp.json`) or any client that takes a URL:
-  `{"mcpServers": {"pharmawatch": {"url": "https://pharmawatch-api-zmwy.onrender.com/mcp"}}}`
+  `{"mcpServers": {"pharmawatch": {"url": "https://pharmawatch-api-7wm1.onrender.com/mcp"}}}`
 - The host is on Render's free plan; a scheduled GitHub Actions job keeps it awake (see [Hosting](#hosting-render-free-plan)).
   If it was asleep anyway, the first call can take about a minute.
 - **If a tool call fails:** a 503 means the service is suspended or deploying; "unknown listing id" from
@@ -624,7 +624,7 @@ needs none of this.
 
 ```bash
 npx @modelcontextprotocol/inspector python mcp_server.py                     # web UI (local)
-npx @modelcontextprotocol/inspector --transport http --server-url https://pharmawatch-api-zmwy.onrender.com/mcp
+npx @modelcontextprotocol/inspector --transport http --server-url https://pharmawatch-api-7wm1.onrender.com/mcp
 npx @modelcontextprotocol/inspector --cli python mcp_server.py --method tools/list
 ```
 
