@@ -26,14 +26,14 @@ export function Logo() {
   );
 }
 
-/** Under the hood, Docs, GitHub: top right on every page. */
+/** Under the hood (toggles shop <-> engine), Docs, GitHub: top right on every page. */
 export function SiteNav({ current }: { current?: "engine" }) {
   const item = "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-accent";
   return (
     <nav aria-label="Site" className="flex flex-wrap items-center gap-1">
       <Link
-        href="/engine"
-        aria-current={current === "engine" ? "page" : undefined}
+        href={current === "engine" ? "/" : "/engine"}
+        title={current === "engine" ? "Back to the shop" : "See every SerpApi call, cache decision and credit"}
         className={`${item} ${current === "engine" ? "bg-accent text-white" : "border border-line bg-panel text-ink hover:border-accent/60"}`}
       >
         <Cpu aria-hidden className="h-4 w-4" /> Under the hood
