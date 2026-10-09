@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 export const GITHUB_URL = "https://github.com/b25cs1051-KUSH/Serp-Api-Hackathon";
-export const DOCS_URL = `${GITHUB_URL}#readme`;
+export const DOCS_URL = "https://pharmawatch-api-7wm1.onrender.com/docs";
 
 function GithubMark({ className }: { className?: string }) {
   return (
