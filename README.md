@@ -574,12 +574,20 @@ Design choices:
 
 **Add the public connector:**
 
-- **Claude** (claude.ai or Claude Desktop): Settings → Connectors → Add custom connector → URL
-  `https://pharmawatch-api-zmwy.onrender.com/mcp`.
+Nothing to install, no account with us, no keys: the connector runs on our server and uses our SerpApi key.
+
+- **Claude** (claude.ai, Claude Desktop or the mobile app; Free, Pro, Max): Customize → Connectors → **+** →
+  **Add custom connector**. Name it PharmaWatch, paste `https://pharmawatch-api-zmwy.onrender.com/mcp`, leave
+  OAuth empty, click **Add**. Then, in a chat, turn it on from **+** → Connectors and ask, for example: *"Cheapest
+  way to buy Dolo 650 × 30, Stamlo 5 and Atorbest 10 delivered to 382010?"* Free accounts can add one custom
+  connector. On Team and Enterprise an owner adds it for the organisation first.
 - **Cursor** (`~/.cursor/mcp.json`) or any client that takes a URL:
   `{"mcpServers": {"pharmawatch": {"url": "https://pharmawatch-api-zmwy.onrender.com/mcp"}}}`
 - The host is on Render's free plan; a scheduled GitHub Actions job keeps it awake (see [Hosting](#hosting-render-free-plan)).
   If it was asleep anyway, the first call can take about a minute.
+- **If a tool call fails:** a 503 means the service is suspended or deploying; "unknown listing id" from
+  `get_buy_link` means the server restarted since the search, so search again; "budget" means the daily
+  credit cap (`DAILY_CREDIT_BUDGET`) was reached: new searches wait until 00:00 UTC, cached ones still work.
 
 **Run it locally instead** (`claude_desktop_config.json`; use your own absolute path and Python):
 
