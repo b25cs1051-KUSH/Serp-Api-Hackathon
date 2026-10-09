@@ -7,7 +7,7 @@ import { buyLink, inr, isProductLink, type Listing } from "@/lib/api";
 import { byPrice, deliverable, type Offer } from "@/lib/offers";
 
 /** Delivery text colour: green free, amber charged, red when it can't be delivered or the fee is unknown. */
-const DELIVERY_TONE: Record<Listing["delivery_status"], string> = {
+export const DELIVERY_TONE: Record<Listing["delivery_status"], string> = {
   free: "text-hit",
   charged: "text-miss",
   pickup_only: "text-bad",
@@ -15,7 +15,7 @@ const DELIVERY_TONE: Record<Listing["delivery_status"], string> = {
   unserviceable: "text-bad",
 };
 
-function Badge({ tone, children }: { tone: "green" | "lightgreen" | "yellow" | "red" | "blue"; children: React.ReactNode }) {
+export function Badge({ tone, children }: { tone: "green" | "lightgreen" | "yellow" | "red" | "blue"; children: React.ReactNode }) {
   const cls = {
     green: "bg-hit/12 text-hit ring-hit/30",
     lightgreen: "bg-emerald-100 text-emerald-800 ring-emerald-300",
@@ -47,7 +47,7 @@ export function VisitButton({ l, pending }: { l: Listing; pending?: boolean }) {
   );
 }
 
-function PerTablet({ o }: { o: Offer }) {
+export function PerTablet({ o }: { o: Offer }) {
   if (o.perTablet == null) return <span className="text-xs text-faint">—</span>;
   return (
     <span className="tnum font-mono text-sm font-semibold" title={o.perTabletEstimated ? "Pack size estimated" : undefined}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Search, ShieldCheck, Stethoscope, Timer, TrendingDown } from "lucide-react";
+import { Loader2, MapPin, Search, ShieldCheck, Stethoscope } from "lucide-react";
 import { useEffect, useState } from "react";
 import ChooseCard from "@/components/ChooseCard";
 import PrescriptionForm, { RX_EXAMPLE } from "@/components/PrescriptionForm";
@@ -8,11 +8,11 @@ import SiteFooter from "@/components/shell/SiteFooter";
 import ProductCard from "@/components/shop/ProductCard";
 import Receipt from "@/components/shop/Receipt";
 import ShopHeader, { type ShopTab } from "@/components/shop/ShopHeader";
-import OfferList from "@/components/shop/OfferList";
+import OfferColumn from "@/components/shop/OfferColumn";
 import { EmptyState, ErrorNote, LoadingCards } from "@/components/shop/ShopStates";
 import type { Listing, RxItem } from "@/lib/api";
 import { rememberLogos } from "@/lib/logos";
-import { buildOffers, byPrice, bySpeed } from "@/lib/offers";
+import { buildOffers } from "@/lib/offers";
 import { usePrescription } from "@/lib/usePrescription";
 import { useSearch } from "@/lib/useSearch";
 
@@ -24,7 +24,6 @@ export default function ShopView() {
   const [tab, setTab] = useState<ShopTab>("one");
   const [query, setQuery] = useState("");
   const [pincode, setPincode] = useState("110001");
-  const [sort, setSort] = useState<"price" | "speed">("price");
   const [rxItems, setRxItems] = useState<RxItem[]>(RX_EXAMPLE);
 
   // /shop?tab=rx opens the prescription tab (read after mount so the static page stays the same for everyone).
@@ -45,7 +44,6 @@ export default function ShopView() {
     if (!text || running || pincode.length !== 6) return;
     setQuery(text);
     setTab("one");
-    setSort("price");
     run(text, pincode, true);
   };
   const submitRx = (items: RxItem[] = rxItems) => {
@@ -70,10 +68,11 @@ export default function ShopView() {
   const zone = state.pincode === pincode ? listings[0]?.pincode_zone : undefined;
   const name = state.alternatives?.matched_brand ?? state.query;
   const pending = (l: Listing) => state.links && !state.linksResolved && listings.indexOf(l) < 5;
-  const offers = buildOffers(name, listings, state.alternatives).sort(sort === "price" ? byPrice : bySpeed);
+  const offers = buildOffers(name, listings, state.alternatives);
+  const own = offers.filter((o) => !o.isSwap);
+  const swaps = offers.filter((o) => o.isSwap);
   const alts = state.alternatives;
-  const searched = (alts?.matched_brand ?? state.query).toLowerCase();
-  const notSold = (alts?.not_found ?? []).filter((n) => !/generic/i.test(n) && !n.toLowerCase().startsWith(searched));
+  const notSold = alts?.not_found ?? [];
 
   return (
     <div className="theme-light min-h-screen w-full">
@@ -150,54 +149,52 @@ export default function ShopView() {
                       <>
                         <ProductCard name={name} listings={listings} reference={alts?.reference} pending={pending} />
 
-                        <section aria-labelledby="offers-title" className="surface overflow-hidden">
-                          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-panel-2 px-4 py-3">
-                            <div>
-                              <h2 id="offers-title" className="text-base font-bold">
-                                Every offer <span className="font-normal text-muted">· {offers.length}</span>
-                              </h2>
-                              <p className="text-xs text-muted">
-                                {name} and brands with the same salt{alts?.composition ? ` (${alts.composition.name})` : ""}, delivered to {state.pincode}
+                        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-2">
+                          <OfferColumn
+                            id="own-title"
+                            title={name}
+                            offers={own}
+                            pending={pending}
+                            empty="Not sold online for this PIN right now."
+                            sub={
+                              <span className="flex flex-wrap items-center gap-1.5">
+                                <MapPin aria-hidden className="h-3 w-3" /> Every pharmacy, cheapest per tablet first, delivered to {state.pincode}
+                                {zone && <span className="rounded bg-panel px-1.5 text-[10px] uppercase tracking-wide text-faint ring-1 ring-line">{zone}</span>}
+                              </span>
+                            }
+                          />
+                          <OfferColumn
+                            id="alt-title"
+                            title="Alternative medicines"
+                            offers={swaps}
+                            empty={
+                              alts === undefined && running
+                                ? "Looking for alternative medicines…"
+                                : alts === null
+                                  ? "We couldn't identify this medicine, so no alternatives are suggested."
+                                  : "No alternative medicines found online for this PIN."
+                            }
+                            sub={
+                              alts?.composition ? (
+                                <>
+                                  {alts.composition.name}
+                                  {alts.composition.brand_count != null && ` · ${swaps.length} of ${alts.composition.brand_count} brands found online`}
+                                </>
+                              ) : undefined
+                            }
+                          >
+                            {alts === null && (
+                              <p className="flex items-center gap-1.5">
+                                <ShieldCheck className="h-3.5 w-3.5" /> We never guess on medicines.
                               </p>
-                            </div>
-                            <div role="tablist" aria-label="Sort offers" className="flex rounded-lg bg-panel p-1 ring-1 ring-line">
-                              {([
-                                ["price", "Best price", TrendingDown],
-                                ["speed", "Fastest delivery", Timer],
-                              ] as const).map(([id, label, Icon]) => (
-                                <button
-                                  key={id}
-                                  type="button"
-                                  role="tab"
-                                  aria-selected={sort === id}
-                                  onClick={() => setSort(id)}
-                                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-accent ${
-                                    sort === id ? "bg-accent text-white shadow-sm" : "text-muted hover:text-ink"
-                                  }`}
-                                >
-                                  <Icon aria-hidden className="h-4 w-4" /> {label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="p-3 md:p-0">
-                            <OfferList offers={offers} pending={pending} framed={false} />
-                          </div>
-                        </section>
-
-                        <div className="space-y-1.5 px-1 text-xs text-muted">
-                          {alts === undefined && running && <p>Looking for brands with the same salt…</p>}
-                          {alts === null && (
-                            <p className="flex items-center gap-1.5">
-                              <ShieldCheck className="h-3.5 w-3.5" /> We couldn&apos;t identify this medicine&apos;s salt, so no other brands are suggested.
-                            </p>
-                          )}
-                          {notSold.length > 0 && <p>Not sold online for this PIN right now: {notSold.join(", ")}.</p>}
-                          {alts && (
-                            <p className="flex items-center gap-1.5 font-medium text-[#854d0e]">
-                              <Stethoscope className="h-3.5 w-3.5" /> Same salt, strength and form. Ask your doctor or pharmacist before switching brands.
-                            </p>
-                          )}
+                            )}
+                            {notSold.length > 0 && <p>Not sold online for this PIN right now: {notSold.join(", ")}.</p>}
+                            {alts && (
+                              <p className="flex items-center gap-1.5 font-medium text-[#854d0e]">
+                                <Stethoscope className="h-3.5 w-3.5" /> Same strength and form. Ask your doctor or pharmacist before switching.
+                              </p>
+                            )}
+                          </OfferColumn>
                         </div>
                       </>
                     )}
