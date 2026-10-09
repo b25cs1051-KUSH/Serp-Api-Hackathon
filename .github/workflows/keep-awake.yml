@@ -1,0 +1,26 @@
+# Keeps the Render free-plan API awake: free web services sleep after 15 min idle, and the first request
+# after that waits about a minute. The static frontend uses no instance hours, so the API alone fits in
+# Render's 750 free hours a month. /api/health makes no SerpApi call (0 credits).
+name: keep-awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # GitHub may delay scheduled runs by a few minutes
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the API health endpoint
+        env:
+          API_URL: ${{ vars.API_URL || 'https://pharmawatch-api-zmwy.onrender.com' }}
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$API_URL/api/health") || code=000
+            echo "attempt $attempt: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 20
+          done
+          echo "::warning::API did not answer 200 (suspended, deploying or down)"

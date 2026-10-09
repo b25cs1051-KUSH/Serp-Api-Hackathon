@@ -1,7 +1,7 @@
 # PharmaWatch
 
 Type a medicine, or a whole prescription, and your PIN code. PharmaWatch shows what it actually costs
-**delivered to your door** from 13 Indian online pharmacies, finds **brands with the same composition**
+**delivered to your door** from 10 Indian online pharmacies whose delivery fees we verified, finds **brands with the same composition**
 that are cheaper, and works out the **cheapest way to buy everything**, delivery fees included.
 
 ```
@@ -273,8 +273,16 @@ not used.
 
 ### 5. Shelf price is not what you pay
 
-Apollo's Stamlo-5 15's costs ₹40 on the shelf and **₹120** delivered to 110001. Chemist180 charges
-₹66.02 with free delivery. Ranking by delivered price reverses the order.
+Apollo's Stamlo-5 15's costs ₹40 on the shelf and **₹133.22** delivered to 110001 (₹93.22 delivery below
+₹199). Ranking by delivered price, not shelf price, changes which pharmacy wins.
+
+**Fees we can stand behind.** Every fee in `notes/postal_codes_delivery_rules.json` names its source: a
+checkout cart (Apollo, PharmEasy, 1mg, Truemeds) or the shipping line on the pharmacy's Google product page
+(Netmeds, SastaSundar, Chemist180, Dawaa Dost, Medizinhub). Four pharmacies whose fees we could not verify
+(Kogland, Medivik, Magicine, eMedicalwala) were removed rather than priced on a guess. Medplus does not
+publish a fee, so its listings show "fee not published" and never win a comparison. The rules file is also
+the only list of pharmacies: adding one is one entry there (fees, plus the name and words that recognise it
+in Google Shopping), and `scripts/test_rules_integrity.py` checks that every entry is recognised and priced.
 
 ### 6. Step by step was slow
 
@@ -461,6 +469,24 @@ uvicorn api.main:app --port 8000
 cd web && npm install && npm run dev
 ```
 
+### Hosting (Render free plan)
+
+`render.yaml` is a Render Blueprint (New → Blueprint → this repo). It creates:
+
+| Service | What it is |
+|---|---|
+| `pharmawatch-cache` | Render Key Value (Redis-compatible), private to the API |
+| `pharmawatch-api` | The FastAPI app from `api/Dockerfile.render`, serving the website's API and the public MCP connector at `/mcp`. The embedding model runs on ONNX instead of PyTorch, so it fits the 512 MB free instance |
+| `pharmawatch-static` | The web UI as a Next.js static export (`NEXT_OUTPUT=export`), served as plain files |
+
+Keys (`SERP_API_KEY`, `GEMINI_API_KEY`) are entered in the Render dashboard and never committed. The
+Blueprint also sets `DAILY_CREDIT_BUDGET=30` and `MAX_CONCURRENT_SEARCHES=3`.
+
+Free web services sleep after 15 minutes without traffic, and Render gives 750 free instance hours a month.
+A static site uses none, so the API alone can stay up all month (about 744 hours).
+`.github/workflows/keep-awake.yml` calls `GET /api/health` every 10 minutes (0 SerpApi credits) to keep it
+awake; set the repository variable `API_URL` if the API's address changes.
+
 ### API endpoints
 
 | Endpoint | What it returns |
@@ -552,7 +578,8 @@ Design choices:
   `https://pharmawatch-api-zmwy.onrender.com/mcp`.
 - **Cursor** (`~/.cursor/mcp.json`) or any client that takes a URL:
   `{"mcpServers": {"pharmawatch": {"url": "https://pharmawatch-api-zmwy.onrender.com/mcp"}}}`
-- The free host sleeps when idle; the first call after that can take about a minute.
+- The host is on Render's free plan; a scheduled GitHub Actions job keeps it awake (see [Hosting](#hosting-render-free-plan)).
+  If it was asleep anyway, the first call can take about a minute.
 
 **Run it locally instead** (`claude_desktop_config.json`; use your own absolute path and Python):
 
@@ -567,8 +594,10 @@ Design choices:
 }
 ```
 
-The server reads `.env` from the repo root, whatever directory the client starts it in. Redis must be running
-(`docker compose up -d redis`, or the full stack).
+The server reads `.env` from the repo root, whatever directory the client starts it in. Redis is optional:
+with it (`docker compose up -d redis`), repeat and similar searches are free from the cache; without it, every
+tool call goes straight to SerpApi and the two cache tools report that Redis is down. The public connector
+needs none of this.
 
 **Code layout** (`pharmawatch_mcp/`; `mcp_server.py` is only the stdio launcher):
 
