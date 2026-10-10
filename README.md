@@ -1,23 +1,56 @@
 # PharmaWatch
 
-Recording the local Windows demo? See [the laptop setup and commands](DEMO_SETUP.md).
+Medicine prices **delivered to your PIN code** from 10 Indian online pharmacies, cheaper brands with
+**the same composition**, and the **cheapest way to buy a whole prescription**. Built for the SerpApi
+India Hackathon 2026 (**Commerce & Market Intelligence** track).
 
-Type a medicine, or a whole prescription, and your PIN code. PharmaWatch shows what it costs
-**delivered to your door** from 10 Indian online pharmacies (9 with verified delivery fees), finds **brands with the same composition**
-that are cheaper, and works out the **cheapest way to buy everything**, delivery fees included.
+| | |
+|---|---|
+| **Website** | https://pharmawatch-static.onrender.com |
+| **API docs** | https://pharmawatch-api-7wm1.onrender.com/docs |
+| **MCP connector** | `https://pharmawatch-api-7wm1.onrender.com/mcp` ([add it to Claude](#use-it-from-an-ai-agent-mcp)) |
+| **Presentation** | [docs/PharmaWatch_presentation.pdf](docs/PharmaWatch_presentation.pdf) (21 slides) |
+
+Everything runs on Render's free plan. If the site has been idle, the first search can take about a
+minute while the API wakes up.
+
+![Searching Stamlo 5 for PIN 110001: the best delivered offer on top, Stamlo 5 at every pharmacy on the left, alternative medicines with the same composition on the right](docs/shop.png)
+
+Type a medicine, or a whole prescription, and your PIN code. PharmaWatch shows what each pharmacy
+charges once delivery and platform fees are added, finds brands with the same salt, strength and form,
+and works out the cheapest way to buy everything:
 
 ![A prescription of Dolo 650 ×30, Stamlo 5 and Pan 40 delivered to PIN 110001: one SastaSundar order with free delivery for ₹161.76, ₹42.22 less than the prescribed brands at ₹203.98](docs/prescription.png)
 
-It is built on [SerpApi](https://serpapi.com) (Google Shopping + Google product pages), a Redis cache
-that decides when *not* to call SerpApi, an index of 246,046 Indian medicines that says which brands
-share a composition, and Gemini, used for one narrow job: reading misspellings.
+What it brings together:
 
----
+- **The delivered price, not the shelf price.** Each pharmacy's fees for your PIN zone are added before
+  anything is ranked. Stamlo 5 is ₹40 on the shelf at Apollo and ₹133.22 delivered to 110001.
+- **Alternatives from a medicine index, not a guess.** 246,046 Indian medicines decide which brands share
+  a composition. Gemini only helps read misspellings, choosing among candidates the index supplies.
+- **A cache in front of SerpApi.** Exact and semantic matches with a dosage guard: a repeat search costs
+  0 credits and answers in milliseconds.
+- **A whole prescription as one basket.** Each pharmacy's delivery rules apply to its own order total,
+  so the plan covers every medicine and fee together.
+- **The same engine for AI agents.** An MCP server with 5 typed tools, hosted and local.
+
+## How we use SerpApi
+
+| SerpApi feature | How PharmaWatch uses it |
+|---|---|
+| `google_shopping` | The main search, plus up to four searches per medicine for same-composition brands, run in parallel |
+| `google_immersive_product` | The pharmacy's own product page: for the cheapest offers up front, for any other when it is clicked |
+| `json_restrictor` | Only the fields we read: a Shopping response shrinks from 187–282 KB to 111–125 KB, a product page from ~27 KB to 212 bytes |
+| Account API | Live plan usage on the *Under the hood* page (free call, cached 30 s) |
+| `serpapi_cache/` (ours) | A drop-in for `serpapi.Client.search()`: Redis exact and semantic hits, so repeat searches cost 0 credits |
+| Credit controls (ours) | A daily credit budget, a concurrency limit, request timeouts and an optional second key |
 
 ## Contents
 
+- [How we use SerpApi](#how-we-use-serpapi)
 - [How a search works](#how-a-search-works)
 - [A whole prescription](#a-whole-prescription)
+- [Use it from an AI agent (MCP)](#use-it-from-an-ai-agent-mcp)
 - [Compared with the pharmacies' own suggestions](#compared-with-the-pharmacies-own-suggestions)
 - [Medicine data](#medicine-data)
 - [Keeping the LLM grounded](#keeping-the-llm-grounded)
@@ -25,7 +58,6 @@ share a composition, and Gemini, used for one narrow job: reading misspellings.
 - [Problems we hit, and what fixed them](#problems-we-hit-and-what-fixed-them)
 - [What one search costs](#what-one-search-costs)
 - [Setup](#setup)
-- [Use it from Claude or Codex (MCP)](#use-it-from-claude-or-codex-mcp)
 - [Tests](#tests)
 - [Project layout](#project-layout)
 - [Known limits](#known-limits)
@@ -36,18 +68,11 @@ share a composition, and Gemini, used for one narrow job: reading misspellings.
 
 Everything after the first step runs in parallel. Results reach the browser as each piece finishes.
 
-```
- t=0  what is "Stamlo 5"?  medicine index, ~1 ms, 0 credits → Amlodipine 5mg tablet, 281 brands
-      │   ("paracetamol" without a strength → the user picks one first; nothing is searched)
-      │
-      └─ Google Shopping: "Stamlo 5 price" ──▶ main list (only real Stamlo 5 listings)
-            │                                 └─▶ product page link for the cheapest (parallel)
-            │
-            ├─ "Amlodipine 5mg tablet generic"               ─┐  pool every search
-            ├─ the same + a pharmacy's name                   ├▶ every brand of the salt found anywhere,
-            └─ "Amlopres 5" (a discounted-generic brand)     ─┘   per tablet, delivery included
-                                                                ▶ link for the cheapest alternative
-```
+![SerpApi searches expand the offer pool: one google_shopping call with json_restrictor, the main results streamed to the browser, then up to four concurrent candidate searches pooled into alternatives, and google_immersive_product for product pages](docs/slides/serpapi-pipeline.png)
+
+The same flow end to end, from the browser or an AI client to one shared pipeline:
+
+![One backend for browser and agent access: Next.js and MCP clients call FastAPI and the MCP server, which share the resolve, search, match and basket functions over the SQLite index, Redis cache and SerpApi](docs/slides/architecture.png)
 
 1. **What the search names.** `pharmawatch/medicines.py` looks the words up in an index of **246,046
    Indian medicines** (see [Medicine data](#medicine-data)): a brand ("Stamlo 5"), a salt
@@ -110,6 +135,183 @@ putting two in one order.
 The UI's *Whole prescription* tab streams each medicine as it finishes; *Under the hood* shows every
 lookup of every line and how many assignments the optimiser priced. The same basket is available as
 `GET /api/prescription/stream`, `GET /api/prescription` and the MCP tool `plan_prescription`.
+
+## Use it from an AI agent (MCP)
+
+![MCP tools: an AI client reaches the same pipeline over stdio or Streamable HTTP; tools answer in Markdown plus structured content](docs/slides/mcp.png)
+
+PharmaWatch is an [MCP](https://modelcontextprotocol.io) server, built on the official Python SDK, in two ways:
+
+- **Public connector, nothing to install:** `https://pharmawatch-api-7wm1.onrender.com/mcp` (Streamable HTTP),
+  served by the same process as the website's API. `server.json` describes it for the official MCP Registry as
+  `io.github.b25cs1051-KUSH/pharmawatch`.
+- **Local, over stdio:** `python mcp_server.py`, for Claude Desktop, Cursor and MCP Inspector with your own keys.
+
+Every tool calls the same code as the web app's HTTP API (`api/main.py`), so input validation, the concurrency
+limit, the search deadline, the daily credit budget and credit accounting are shared. An agent gets the same
+answers a shopper gets on the website.
+
+| Tool | What it does | Credits |
+|---|---|---|
+| `search_medicine(query, pincode, resolve_links=false)` | Listings ranked by what the buyer pays delivered to the PIN, cheaper same-salt brands with per-tablet savings, spelling correction, a strength prompt for names like "paracetamol" | ~4 for a new medicine, 0 from cache |
+| `plan_prescription(medicines[{name, tablets?}], pincode, resolve_links=false)` | The cheapest way to buy a whole prescription: three plans (cheapest with swaps, one pharmacy, exactly as prescribed) as orders per pharmacy with delivery, the swap saving, a per-medicine comparison, and lines that need a strength | ~4 per new medicine, 0 from cache |
+| `get_buy_link(listing_id)` | The listing's own pharmacy product page, resolved on demand: the same lookup as a Buy click in the web app (`/api/link/{id}`) | 1 the first time, then 0 for 24 h |
+| `cache_lab(query, top=6)` | What the cache would do: exact key, nearest cached queries with cosine scores, the dosage guard | 0 |
+| `cache_stats()` | Redis status, what is cached (by kind and size), credits spent vs saved in this server | 0 |
+
+Prompts: `compare_medicine(medicine, pincode)` and `plan_my_prescription(prescription, pincode)`, which clients show
+as ready-made actions.
+
+Design choices:
+
+- **Typed output and readable text.** Every tool publishes an `outputSchema` and returns `structuredContent`
+  (all listings, ids, link types, savings, run summary) alongside a compact Markdown answer for the model's
+  context. `response_format="json"` returns the structured data as the text too.
+- **Links an agent can act on.** Every listing and basket item has a `listing_id` and a `link_type`
+  (`product_page`, `store_search`, `google_shopping`). The agent calls `get_buy_link` only for the offer the user
+  picks, instead of resolving every link up front. Only that pharmacy's page is returned, never another store's.
+- **Schemas every client can read.** `$ref`/`$defs` are inlined, so clients that don't resolve references still
+  see that a prescription item has `name` and `tablets`.
+- **Credit-safe defaults.** `resolve_links` is off. The server instructions give the real costs and the workflow
+  (search, show the delivered price, `get_buy_link` on request). `DAILY_CREDIT_BUDGET`, when set, caps MCP calls too.
+- **Errors the model can act on.** A bad PIN or query, an unknown listing id, a busy server or a used-up budget
+  come back as tool errors with a code (`invalid_pincode: ...`) before anything is spent. A search that fails
+  halfway still returns what it found, marked "Search incomplete".
+- **Clear output.** A spelling correction is stated ("Read \"dollo 650\" as Dolo 650"), estimated pack sizes
+  are marked `~`, and swaps always carry "Same salt, strength and form. Ask a doctor or pharmacist before
+  switching brands."
+- **Annotations and progress.** `cache_lab` and `cache_stats` are read-only. The searches are open-world,
+  non-destructive and idempotent. Both searches send MCP progress notifications for each lookup and stage.
+- **Clean stdout.** The protocol runs on a private copy of stdout. Console prints from the cache and library
+  warnings go to stderr, which MCP clients keep as the server log.
+
+**Add the public connector:**
+
+Nothing to install, no account with us, no keys: the connector runs on our server and uses our SerpApi key.
+
+- **Claude** (claude.ai, Claude Desktop or the mobile app; Free, Pro, Max): Customize → Connectors → **+** →
+  **Add custom connector**. Name it PharmaWatch, paste `https://pharmawatch-api-7wm1.onrender.com/mcp`, leave
+  OAuth empty, click **Add**. Then, in a chat, turn it on from **+** → Connectors and ask, for example: *"Cheapest
+  way to buy Dolo 650 × 30, Stamlo 5 and Atorbest 10 delivered to 382010?"* Free accounts can add one custom
+  connector. On Team and Enterprise an owner adds it for the organisation first.
+- **Cursor** (`~/.cursor/mcp.json`) or any client that takes a URL:
+  `{"mcpServers": {"pharmawatch": {"url": "https://pharmawatch-api-7wm1.onrender.com/mcp"}}}`
+- The host is on Render's free plan; a scheduled GitHub Actions job keeps it awake (see [Hosting](#hosting-render-free-plan)).
+  If it was asleep anyway, the first call can take about a minute.
+- **If a tool call fails:** a 503 means the service is suspended or deploying; "unknown listing id" from
+  `get_buy_link` means the server restarted since the search, so search again; "budget" means the daily
+  credit cap (`DAILY_CREDIT_BUDGET`) was reached: new searches wait until 00:00 UTC, cached ones still work.
+
+**Run it locally instead** (`claude_desktop_config.json`; use your own absolute path and Python):
+
+```json
+{
+  "mcpServers": {
+    "pharmawatch": {
+      "command": "python",
+      "args": ["/absolute/path/to/Serp-Api-Hackathon/mcp_server.py"]
+    }
+  }
+}
+```
+
+The server reads `.env` from the repo root, whatever directory the client starts it in. Redis is optional:
+with it (`docker compose up -d redis`), repeat and similar searches are free from the cache; without it, every
+tool call goes straight to SerpApi and the two cache tools report that Redis is down. The public connector
+needs none of this.
+
+**Code layout** (`pharmawatch_mcp/`; `mcp_server.py` is only the stdio launcher):
+
+| Module | Job |
+|---|---|
+| `app.py` | The server instance and the instructions the model reads |
+| `models.py` | Typed inputs and outputs; each output model is a tool's `outputSchema` |
+| `convert.py` | The API's result dicts → output models (links, plans, spelling, savings) |
+| `render.py` | Output models → compact Markdown |
+| `tools.py` | The five tools, progress reporting, error mapping |
+| `prompts.py` | `compare_medicine`, `plan_my_prescription` |
+| `schemas.py` | `$ref` inlining for clients that don't resolve `$defs` |
+| `stdio.py` / `remote.py` | Local transport / Streamable HTTP at `/mcp` on the API (`MCP_ALLOWED_HOSTS` for Host checks) |
+
+**Codex CLI or IDE (local Windows setup):** Install `requirements.txt` into this project's `.venv`,
+then register the same stdio server from PowerShell in the repo root. See the
+[Codex MCP configuration guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) for other platforms.
+
+```powershell
+$python = (Resolve-Path .venv\Scripts\python.exe).Path
+$server = (Resolve-Path mcp_server.py).Path
+codex mcp add pharmawatch -- $python $server
+codex mcp get pharmawatch
+```
+
+In `~/.codex/config.toml`, add these values under the resulting `[mcp_servers.pharmawatch]` section:
+
+```toml
+default_tools_approval_mode = "writes"
+tool_timeout_sec = 180
+```
+
+The approval setting prompts before `search_medicine` or `plan_prescription`, which can spend SerpApi
+credits; `cache_lab` and `cache_stats` are marked read-only. The 180-second timeout covers the default
+135-second prescription deadline. Raise it if `SEARCH_TIMEOUT_S` is increased. Codex stores the local
+server with absolute paths, so register it again after moving the repo or rebuilding `.venv` elsewhere.
+
+Restart the Codex IDE extension or open a new Codex session, then check `codex mcp list` or `/mcp` in
+the Codex CLI. Ask “Use pharmawatch cache_stats to check Redis” for a zero-credit check, or ask
+“Use pharmawatch to find the cheapest delivered price for Stamlo 5 to PIN 110001” for a live search.
+
+**MCP Inspector:**
+
+```bash
+npx @modelcontextprotocol/inspector python mcp_server.py                     # web UI (local)
+npx @modelcontextprotocol/inspector --transport http --server-url https://pharmawatch-api-7wm1.onrender.com/mcp
+npx @modelcontextprotocol/inspector --cli python mcp_server.py --method tools/list
+```
+
+**Example.** Asking Claude *"Where is Telma 40 cheapest delivered to 110001, and is there a cheaper brand?"* makes
+it call `search_medicine`. Real output from a cached run (links shortened):
+
+```markdown
+## Telma 40: delivered prices to PIN 110001
+
+Cheapest delivered: **₹144.40** at 1mg (₹50 delivery · add ₹405.60 more for FREE delivery).
+
+| # | Pharmacy | Product | Shelf price | Delivery | You pay | Arrives | Buy |
+|---|---|---|---|---|---|---|---|
+| 1 | 1mg | Telma 40 Tablet | ₹94.40 | ₹50 delivery · add ₹405.60 more for FREE delivery | ₹144.40 | 1-2 Days | [store search](…) · id `536999347923b066` |
+| 2 | Apollo Pharmacy | Telma 40 mg Tablet 15's | ₹108.00 | ₹93.22 delivery · no free-delivery offer | ₹201.22 | 10-30 Mins / 1 Day | [store search](…) · id `d991be96b6f0bf3c` |
+| 3 | Apollo Pharmacy | Telma 40 mg Tablet 30's | ₹216.50 | ₹7.08 delivery · no free-delivery offer | ₹223.58 | 10-30 Mins / 1 Day | [store search](…) · id `8bf7ca248a13cc06` |
+| 4 | 1mg | Telma 40mg 30 Tablets by wellness forever | ₹189.00 | ₹50 delivery · add ₹311 more for FREE delivery | ₹239.00 | 1-2 Days | [store search](…) · id `fba8cd76406c76e2` |
+| 5 | PharmEasy | Telma 40Mg Strip Of 30 Tablets | ₹166.87 | ₹130 delivery · add ₹763.13 more for FREE delivery · +₹13 platform fee | ₹309.87 | 1-2 Days | [store search](…) · id `ceea2f2e2248bcb8` |
+| 6 | Medplus | Telma 40MG Tab | ₹216.72 | Delivers to PIN 110001, but delivery fee is not published | — | Same Day / Store Pickup | id `44c7115aa841ce5d` |
+
+### Same-salt brands: Telmisartan 40mg tablet
+Reference: Telma 40 mg Tablet 30's at Apollo Pharmacy, ₹223.58, ₹7.45/tablet delivered.
+
+| Brand | Maker | Pharmacy | You pay | Per tablet | Pack | Saving | Buy |
+|---|---|---|---|---|---|---|---|
+| Telx 40mg | Alteus Biogenics Pvt Ltd | SastaSundar | ₹93.12 | ₹6.21 | 15 | 16.6% (₹1.24/tablet) | id `b8e4f4ac5ef71d2e` |
+| Telmibless 40mg | Mankind Pharma Ltd | Truemeds | ₹108.62 | ₹7.24 | 15 | 2.8% (₹0.21/tablet) | id `144be2aedd6fe519` |
+| Telmiride 40 | Unison Pharmaceuticals Pvt Ltd | 1mg | ₹72.70 | ₹7.27 | ~10 (est.) | ≈2.4% (₹0.18/tablet) | [store search](…) · id `8147a4b405166305` |
+
+Per tablet includes delivery. ~ = pack size estimated, ≈ = saving depends on it. Same salt, strength and form. Ask a doctor or pharmacist before switching brands.
+Not deliverable here right now: Cresar 40.
+
+Buy: `product page` opens the pharmacy's own page. For an `id`, call get_buy_link with it to get that pharmacy's product page (1 SerpApi credit the first time, then cached for 24 h).
+
+### Run
+4 SerpApi lookups · 0 credits spent · 4 served from cache (4 exact, 0 semantic) · 0.2 s
+```
+
+The user picks 1mg, so Claude calls `get_buy_link("536999347923b066")`:
+
+```markdown
+**Product page** for Telma 40 Tablet at 1mg: https://www.1mg.com/drugs/telma-40-tablet-156977
+
+0 credits spent · 0.0 s
+```
+
+---
 
 ## Compared with the pharmacies' own suggestions
 
@@ -182,6 +384,8 @@ result = cache.search({"engine": "google_shopping", "q": "Dolo 650 price"})
 The hosted app uses Render Key Value (Redis-compatible), wired to the API by `render.yaml`. Locally it
 is the Redis container from `docker compose`.
 
+![Cache decision: normalise, exact key, then semantic reuse only for eligible queries with the same parameters, cosine ≥ 0.88 and matching numbers; otherwise one SerpApi call and a background Redis write](docs/slides/cache.png)
+
 Each lookup goes through up to three steps:
 
 1. **Exact match.** The normalised query (case, spacing, `500 mg` → `500mg`) is hashed and looked up.
@@ -219,6 +423,10 @@ On top of that:
 Measured: SerpApi calls took **1.7–12 s**; cache hits took **1–20 ms**. With `json_restrictor`, a
 Google Shopping entry in Redis went from **187–282 KB to 111–125 KB** (40 results; the page tokens
 needed for direct links are 58% of what is left), and a product-page entry from **~27 KB to 212 bytes**.
+
+A repeat search on the hosted app, as *Under the hood* shows it: 4 lookups, all exact Redis hits, 0 credits, 603 ms.
+
+<img src="docs/under-the-hood.png" width="420" alt="Under the hood for Stamlo 5: 4 SerpApi lookups, all exact cache hits, 0 credits spent, 603 ms in total">
 
 ---
 
@@ -278,6 +486,8 @@ estimates (outside 0.5–2× the median) are not used.
 
 Apollo's Stamlo-5 15's costs ₹40 on the shelf and **₹133.22** delivered to 110001 (₹93.22 delivery below
 ₹199). Ranking by delivered price, not shelf price, changes which pharmacy wins.
+
+![The shelf price is not the price you pay: Stamlo 5 for PIN 110001 is ₹40.00 on the shelf at Apollo, ₹133.22 delivered, while Amodep 5 (same salt) is ₹44.08 delivered at SastaSundar](docs/slides/shelf-vs-delivered.png)
 
 **Where the fees come from.** Every fee in `notes/postal_codes_delivery_rules.json` names its source: a
 checkout cart (Apollo, PharmEasy, 1mg, Truemeds) or the shipping line on the pharmacy's Google product page
@@ -460,182 +670,6 @@ browser `EventSource` can't read an HTTP error body.
 - The Gemini key is sent in a request header, not the URL.
 - API responses report *whether* a key is configured, never its value.
 - Errors from the SerpApi account lookup are reported without the request URL, which contains the key.
-
----
-
-## Use it from Claude or Codex (MCP)
-
-PharmaWatch is an [MCP](https://modelcontextprotocol.io) server, built on the official Python SDK, in two ways:
-
-- **Public connector, nothing to install:** `https://pharmawatch-api-7wm1.onrender.com/mcp` (Streamable HTTP),
-  served by the same process as the website's API. `server.json` describes it for the official MCP Registry as
-  `io.github.b25cs1051-KUSH/pharmawatch`.
-- **Local, over stdio:** `python mcp_server.py`, for Claude Desktop, Cursor and MCP Inspector with your own keys.
-
-Every tool calls the same code as the web app's HTTP API (`api/main.py`), so input validation, the concurrency
-limit, the search deadline, the daily credit budget and credit accounting are shared. An agent gets the same
-answers a shopper gets on the website.
-
-| Tool | What it does | Credits |
-|---|---|---|
-| `search_medicine(query, pincode, resolve_links=false)` | Listings ranked by what the buyer pays delivered to the PIN, cheaper same-salt brands with per-tablet savings, spelling correction, a strength prompt for names like "paracetamol" | ~4 for a new medicine, 0 from cache |
-| `plan_prescription(medicines[{name, tablets?}], pincode, resolve_links=false)` | The cheapest way to buy a whole prescription: three plans (cheapest with swaps, one pharmacy, exactly as prescribed) as orders per pharmacy with delivery, the swap saving, a per-medicine comparison, and lines that need a strength | ~4 per new medicine, 0 from cache |
-| `get_buy_link(listing_id)` | The listing's own pharmacy product page, resolved on demand: the same lookup as a Buy click in the web app (`/api/link/{id}`) | 1 the first time, then 0 for 24 h |
-| `cache_lab(query, top=6)` | What the cache would do: exact key, nearest cached queries with cosine scores, the dosage guard | 0 |
-| `cache_stats()` | Redis status, what is cached (by kind and size), credits spent vs saved in this server | 0 |
-
-Prompts: `compare_medicine(medicine, pincode)` and `plan_my_prescription(prescription, pincode)`, which clients show
-as ready-made actions.
-
-Design choices:
-
-- **Typed output and readable text.** Every tool publishes an `outputSchema` and returns `structuredContent`
-  (all listings, ids, link types, savings, run summary) alongside a compact Markdown answer for the model's
-  context. `response_format="json"` returns the structured data as the text too.
-- **Links an agent can act on.** Every listing and basket item has a `listing_id` and a `link_type`
-  (`product_page`, `store_search`, `google_shopping`). The agent calls `get_buy_link` only for the offer the user
-  picks, instead of resolving every link up front. Only that pharmacy's page is returned, never another store's.
-- **Schemas every client can read.** `$ref`/`$defs` are inlined, so clients that don't resolve references still
-  see that a prescription item has `name` and `tablets`.
-- **Credit-safe defaults.** `resolve_links` is off. The server instructions give the real costs and the workflow
-  (search, show the delivered price, `get_buy_link` on request). `DAILY_CREDIT_BUDGET`, when set, caps MCP calls too.
-- **Errors the model can act on.** A bad PIN or query, an unknown listing id, a busy server or a used-up budget
-  come back as tool errors with a code (`invalid_pincode: ...`) before anything is spent. A search that fails
-  halfway still returns what it found, marked "Search incomplete".
-- **Clear output.** A spelling correction is stated ("Read \"dollo 650\" as Dolo 650"), estimated pack sizes
-  are marked `~`, and swaps always carry "Same salt, strength and form. Ask a doctor or pharmacist before
-  switching brands."
-- **Annotations and progress.** `cache_lab` and `cache_stats` are read-only. The searches are open-world,
-  non-destructive and idempotent. Both searches send MCP progress notifications for each lookup and stage.
-- **Clean stdout.** The protocol runs on a private copy of stdout. Console prints from the cache and library
-  warnings go to stderr, which MCP clients keep as the server log.
-
-**Add the public connector:**
-
-Nothing to install, no account with us, no keys: the connector runs on our server and uses our SerpApi key.
-
-- **Claude** (claude.ai, Claude Desktop or the mobile app; Free, Pro, Max): Customize → Connectors → **+** →
-  **Add custom connector**. Name it PharmaWatch, paste `https://pharmawatch-api-7wm1.onrender.com/mcp`, leave
-  OAuth empty, click **Add**. Then, in a chat, turn it on from **+** → Connectors and ask, for example: *"Cheapest
-  way to buy Dolo 650 × 30, Stamlo 5 and Atorbest 10 delivered to 382010?"* Free accounts can add one custom
-  connector. On Team and Enterprise an owner adds it for the organisation first.
-- **Cursor** (`~/.cursor/mcp.json`) or any client that takes a URL:
-  `{"mcpServers": {"pharmawatch": {"url": "https://pharmawatch-api-7wm1.onrender.com/mcp"}}}`
-- The host is on Render's free plan; a scheduled GitHub Actions job keeps it awake (see [Hosting](#hosting-render-free-plan)).
-  If it was asleep anyway, the first call can take about a minute.
-- **If a tool call fails:** a 503 means the service is suspended or deploying; "unknown listing id" from
-  `get_buy_link` means the server restarted since the search, so search again; "budget" means the daily
-  credit cap (`DAILY_CREDIT_BUDGET`) was reached: new searches wait until 00:00 UTC, cached ones still work.
-
-**Run it locally instead** (`claude_desktop_config.json`; use your own absolute path and Python):
-
-```json
-{
-  "mcpServers": {
-    "pharmawatch": {
-      "command": "python",
-      "args": ["/absolute/path/to/Serp-Api-Hackathon/mcp_server.py"]
-    }
-  }
-}
-```
-
-The server reads `.env` from the repo root, whatever directory the client starts it in. Redis is optional:
-with it (`docker compose up -d redis`), repeat and similar searches are free from the cache; without it, every
-tool call goes straight to SerpApi and the two cache tools report that Redis is down. The public connector
-needs none of this.
-
-**Code layout** (`pharmawatch_mcp/`; `mcp_server.py` is only the stdio launcher):
-
-| Module | Job |
-|---|---|
-| `app.py` | The server instance and the instructions the model reads |
-| `models.py` | Typed inputs and outputs; each output model is a tool's `outputSchema` |
-| `convert.py` | The API's result dicts → output models (links, plans, spelling, savings) |
-| `render.py` | Output models → compact Markdown |
-| `tools.py` | The five tools, progress reporting, error mapping |
-| `prompts.py` | `compare_medicine`, `plan_my_prescription` |
-| `schemas.py` | `$ref` inlining for clients that don't resolve `$defs` |
-| `stdio.py` / `remote.py` | Local transport / Streamable HTTP at `/mcp` on the API (`MCP_ALLOWED_HOSTS` for Host checks) |
-
-**Codex CLI or IDE (local Windows setup):** Install `requirements.txt` into this project's `.venv`,
-then register the same stdio server from PowerShell in the repo root. See the
-[Codex MCP configuration guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) for other platforms.
-
-```powershell
-$python = (Resolve-Path .venv\Scripts\python.exe).Path
-$server = (Resolve-Path mcp_server.py).Path
-codex mcp add pharmawatch -- $python $server
-codex mcp get pharmawatch
-```
-
-In `~/.codex/config.toml`, add these values under the resulting `[mcp_servers.pharmawatch]` section:
-
-```toml
-default_tools_approval_mode = "writes"
-tool_timeout_sec = 180
-```
-
-The approval setting prompts before `search_medicine` or `plan_prescription`, which can spend SerpApi
-credits; `cache_lab` and `cache_stats` are marked read-only. The 180-second timeout covers the default
-135-second prescription deadline. Raise it if `SEARCH_TIMEOUT_S` is increased. Codex stores the local
-server with absolute paths, so register it again after moving the repo or rebuilding `.venv` elsewhere.
-
-Restart the Codex IDE extension or open a new Codex session, then check `codex mcp list` or `/mcp` in
-the Codex CLI. Ask “Use pharmawatch cache_stats to check Redis” for a zero-credit check, or ask
-“Use pharmawatch to find the cheapest delivered price for Stamlo 5 to PIN 110001” for a live search.
-
-**MCP Inspector:**
-
-```bash
-npx @modelcontextprotocol/inspector python mcp_server.py                     # web UI (local)
-npx @modelcontextprotocol/inspector --transport http --server-url https://pharmawatch-api-7wm1.onrender.com/mcp
-npx @modelcontextprotocol/inspector --cli python mcp_server.py --method tools/list
-```
-
-**Example.** Asking Claude or Codex *"Where is Telma 40 cheapest delivered to 110001, and is there a cheaper brand?"* makes
-it call `search_medicine`. Real output from a cached run (links shortened):
-
-```markdown
-## Telma 40: delivered prices to PIN 110001
-
-Cheapest delivered: **₹144.40** at 1mg (₹50 delivery · add ₹405.60 more for FREE delivery).
-
-| # | Pharmacy | Product | Shelf price | Delivery | You pay | Arrives | Buy |
-|---|---|---|---|---|---|---|---|
-| 1 | 1mg | Telma 40 Tablet | ₹94.40 | ₹50 delivery · add ₹405.60 more for FREE delivery | ₹144.40 | 1-2 Days | [store search](…) · id `536999347923b066` |
-| 2 | Apollo Pharmacy | Telma 40 mg Tablet 15's | ₹108.00 | ₹93.22 delivery · no free-delivery offer | ₹201.22 | 10-30 Mins / 1 Day | [store search](…) · id `d991be96b6f0bf3c` |
-| 3 | Apollo Pharmacy | Telma 40 mg Tablet 30's | ₹216.50 | ₹7.08 delivery · no free-delivery offer | ₹223.58 | 10-30 Mins / 1 Day | [store search](…) · id `8bf7ca248a13cc06` |
-| 4 | 1mg | Telma 40mg 30 Tablets by wellness forever | ₹189.00 | ₹50 delivery · add ₹311 more for FREE delivery | ₹239.00 | 1-2 Days | [store search](…) · id `fba8cd76406c76e2` |
-| 5 | PharmEasy | Telma 40Mg Strip Of 30 Tablets | ₹166.87 | ₹130 delivery · add ₹763.13 more for FREE delivery · +₹13 platform fee | ₹309.87 | 1-2 Days | [store search](…) · id `ceea2f2e2248bcb8` |
-| 6 | Medplus | Telma 40MG Tab | ₹216.72 | Delivers to PIN 110001, but delivery fee is not published | — | Same Day / Store Pickup | id `44c7115aa841ce5d` |
-
-### Same-salt brands: Telmisartan 40mg tablet
-Reference: Telma 40 mg Tablet 30's at Apollo Pharmacy, ₹223.58, ₹7.45/tablet delivered.
-
-| Brand | Maker | Pharmacy | You pay | Per tablet | Pack | Saving | Buy |
-|---|---|---|---|---|---|---|---|
-| Telx 40mg | Alteus Biogenics Pvt Ltd | SastaSundar | ₹93.12 | ₹6.21 | 15 | 16.6% (₹1.24/tablet) | id `b8e4f4ac5ef71d2e` |
-| Telmibless 40mg | Mankind Pharma Ltd | Truemeds | ₹108.62 | ₹7.24 | 15 | 2.8% (₹0.21/tablet) | id `144be2aedd6fe519` |
-| Telmiride 40 | Unison Pharmaceuticals Pvt Ltd | 1mg | ₹72.70 | ₹7.27 | ~10 (est.) | ≈2.4% (₹0.18/tablet) | [store search](…) · id `8147a4b405166305` |
-
-Per tablet includes delivery. ~ = pack size estimated, ≈ = saving depends on it. Same salt, strength and form. Ask a doctor or pharmacist before switching brands.
-Not deliverable here right now: Cresar 40.
-
-Buy: `product page` opens the pharmacy's own page. For an `id`, call get_buy_link with it to get that pharmacy's product page (1 SerpApi credit the first time, then cached for 24 h).
-
-### Run
-4 SerpApi lookups · 0 credits spent · 4 served from cache (4 exact, 0 semantic) · 0.2 s
-```
-
-The user picks 1mg, so Claude calls `get_buy_link("536999347923b066")`:
-
-```markdown
-**Product page** for Telma 40 Tablet at 1mg: https://www.1mg.com/drugs/telma-40-tablet-156977
-
-0 credits spent · 0.0 s
-```
-
 
 ---
 
