@@ -1,5 +1,7 @@
 # PharmaWatch
 
+Recording the local Windows demo? See [the laptop setup and commands](DEMO_SETUP.md).
+
 Type a medicine, or a whole prescription, and your PIN code. PharmaWatch shows what it costs
 **delivered to your door** from 10 Indian online pharmacies (9 with verified delivery fees), finds **brands with the same composition**
 that are cheaper, and works out the **cheapest way to buy everything**, delivery fees included.
@@ -313,9 +315,10 @@ Combinations stay a gap: the pharmacy-named search returns nothing for them.
 price" returned Atorbest 20 only. The prescribed brand then looked unavailable, and the basket could
 not compare it.
 
-**Fix:** when a brand's own search has none of it, one more search adds the form word ("Pan 40
-tablet": 5 listings of Pan 40; "Atorbest 10 tablet": 6). In a 5-medicine prescription this turned
-"compared on 3 of 5 medicines" into all 5.
+**Fix:** when a brand's own search has none of it, one more search adds the form word and,
+for single-salt medicines, the strength unit from the catalogue. "Stamlo 5 tablet" returned
+related brands only, while "Stamlo 5mg tablet" found the prescribed brand at eight pharmacies.
+Existing units are preserved and combination doses are never guessed.
 
 ### 8. Step by step was slow
 
