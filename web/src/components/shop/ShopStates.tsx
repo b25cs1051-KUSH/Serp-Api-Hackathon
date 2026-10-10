@@ -6,8 +6,12 @@ import { API_URL } from "@/lib/api";
 
 export function EmptyState({ onPaste }: { onPaste: () => void }) {
   return (
-    <section className="py-8">
+    <section className="pb-6 pt-2">
       <h1 className="max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">Lowest delivered price for your medicines.</h1>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
+        Enter a medicine name below and set your 6-digit delivery PIN above, then select Search.
+        Compare prices including delivery across pharmacies, alongside alternatives with the same salt, strength and form.
+      </p>
       <button
         type="button"
         onClick={onPaste}

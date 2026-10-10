@@ -81,6 +81,7 @@ export default function ShopView() {
       <main className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">
         {tab === "one" ? (
           <div id="panel-one" role="tabpanel" aria-labelledby="tab-one" className="py-6">
+            {state.status === "idle" && <EmptyState onPaste={() => setTab("rx")} />}
             <form
               role="search"
               onSubmit={(e) => {
@@ -124,9 +125,7 @@ export default function ShopView() {
               ))}
             </div>
 
-            {state.status === "idle" ? (
-              <EmptyState onPaste={() => setTab("rx")} />
-            ) : (
+            {state.status !== "idle" && (
               <section className="mt-6 space-y-5">
                 {state.error && <ErrorNote message={state.error} />}
                 {state.choose ? (
@@ -205,8 +204,11 @@ export default function ShopView() {
           </div>
         ) : (
           <div id="panel-rx" role="tabpanel" aria-labelledby="tab-rx" className="py-6">
-            <h1 className="text-2xl font-semibold tracking-tight">Your prescription</h1>
-            <p className="mt-1 text-sm text-muted">One medicine per line, e.g. &ldquo;Dolo 650 x30&rdquo;. We find the cheapest way to buy all of it.</p>
+            <h1 className="max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">Your prescription</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
+              Enter or paste your medicines below, with optional tablet counts, and set your 6-digit delivery PIN.
+              Compare complete baskets, delivery included, for your prescribed brands and alternatives with the same salt, strength and form.
+            </p>
             <PrescriptionForm colorKits items={rxItems} setItems={setRxItems} pincode={pincode} setPincode={setPincode} running={rxRunning} onSubmit={() => submitRx()} />
             {rx.state.status !== "idle" && (
               <div className="mt-8">
