@@ -1,20 +1,10 @@
 # PharmaWatch
 
-Type a medicine, or a whole prescription, and your PIN code. PharmaWatch shows what it actually costs
+Type a medicine, or a whole prescription, and your PIN code. PharmaWatch shows what it costs
 **delivered to your door** from 10 Indian online pharmacies (9 with verified delivery fees), finds **brands with the same composition**
 that are cheaper, and works out the **cheapest way to buy everything**, delivery fees included.
 
-```
-Prescription · PIN 110001: Dolo 650 ×30 tablets, Stamlo 5, Pan 40
-
-  Cheapest basket  ₹161.76   one order at SastaSundar, free delivery (order ≥ ₹149)
-    Dolo 650     2 × ~15  ₹52.68   ₹1.76/tablet   as prescribed: already the cheapest of its salt
-    Amodep 5     2 × 15   ₹30.16   ₹1.01/tablet   same salt as Stamlo 5   (₹2.20/tablet)
-    Pentaloc 40  1 × 15   ₹78.92   ₹5.26/tablet   same salt as Pan 40     (₹5.69/tablet)
-  → ₹42.22 less than the prescribed brands (₹203.98), 21% of the bill
-```
-
-(A real run on the hosted API, 10 October 2026: 12 lookups, all from the cache, 0 credits. ~ = pack size estimated.)
+![A prescription of Dolo 650 ×30, Stamlo 5 and Pan 40 delivered to PIN 110001: one SastaSundar order with free delivery for ₹161.76, ₹42.22 less than the prescribed brands at ₹203.98](docs/prescription.png)
 
 It is built on [SerpApi](https://serpapi.com) (Google Shopping + Google product pages), a Redis cache
 that decides when *not* to call SerpApi, an index of 246,046 Indian medicines that says which brands
@@ -26,7 +16,7 @@ share a composition, and Gemini, used for one narrow job: reading misspellings.
 
 - [How a search works](#how-a-search-works)
 - [A whole prescription](#a-whole-prescription)
-- [Cheaper than the pharmacies' own suggestions](#cheaper-than-the-pharmacies-own-suggestions)
+- [Compared with the pharmacies' own suggestions](#compared-with-the-pharmacies-own-suggestions)
 - [Medicine data](#medicine-data)
 - [Keeping the LLM grounded](#keeping-the-llm-grounded)
 - [The cache](#the-cache)
@@ -72,7 +62,7 @@ Everything after the first step runs in parallel. Results reach the browser as e
    - the salt + "tablet generic", which steers Google to the discounted generics pharmacies sell;
    - the same words + a pharmacy's name, which surfaces that pharmacy's own generics (single-salt
      medicines only);
-   - the brand of the salt from a maker whose generics pharmacies discount hardest (a salt search
+   - the brand of the salt from a maker whose generics pharmacies discount most (a salt search
      without one gets the brand whose maker has the widest range).
 
    When Google's answer to a brand has none of it, one more search adds the form word ("Pan 40
@@ -119,23 +109,23 @@ The UI's *Whole prescription* tab streams each medicine as it finishes; *Under t
 lookup of every line and how many assignments the optimiser priced. The same basket is available as
 `GET /api/prescription/stream`, `GET /api/prescription` and the MCP tool `plan_prescription`.
 
-## Cheaper than the pharmacies' own suggestions
+## Compared with the pharmacies' own suggestions
 
-Online pharmacies show a "cheaper alternative" on a medicine's page. PharmaWatch has to beat it, or
-the product makes no sense. `scripts/reference_check.py` measures this on 15 common medicines and 4
-prescriptions. It reads a pharmacy's own suggested alternative from its product page (a test reference
-only: the product itself gets every price from SerpApi). It then compares that with PharmaWatch's
-cheapest same-composition offer from any of the 10 pharmacies, per tablet, delivery included. The
-result is written to `scripts/reference_report.md`.
+Online pharmacies often show a "cheaper alternative" on a medicine's page. PharmaWatch doesn't set out
+to beat any one pharmacy. It puts the offers of all 10 side by side, so the customer can see the
+cheapest one available to them, wherever it is sold. A pharmacy's own suggestion is a useful check
+on that: if it is cheaper than anything PharmaWatch found, a search missed something.
 
-The suggestions it has to beat are mostly discounted generics that list prices can't predict. That
-is why each medicine gets the extra searches described in
-[How a search works](#how-a-search-works) (see
-[problem 6](#6-the-cheapest-generics-are-cheap-only-after-a-pharmacys-discount)).
+`scripts/reference_check.py` runs this check on 15 common medicines and 4 prescriptions. It reads a
+pharmacy's suggested alternative from its product page (a test reference only: the product itself gets
+every price from SerpApi). It then compares that with PharmaWatch's cheapest same-composition offer,
+per tablet, delivery included, and writes the result to `scripts/reference_report.md`.
 
-The last full run predates the switch to verified delivery fees
-([problem 5](#5-shelf-price-is-not-what-you-pay)), so its score is not quoted here. It will be
-rerun on a test key and published in `scripts/reference_report.md`.
+These suggestions are mostly discounted generics that list prices can't predict, which is why each
+medicine gets the extra searches described in [How a search works](#how-a-search-works) (see
+[problem 6](#6-the-cheapest-generics-are-cheap-only-after-a-pharmacys-discount)). The last full run
+predates the switch to verified delivery fees ([problem 5](#5-shelf-price-is-not-what-you-pay)), so
+its score is not quoted here until it is rerun.
 
 ## Medicine data
 
@@ -215,7 +205,7 @@ On top of that:
   always hits.
 - **Call log.** Every lookup records engine, query, outcome (exact / semantic / API call), time taken,
   whether it cost a credit, and *why* it happened ("substitute search: Amlokind 5"). The UI shows it live.
-- **Redis down?** The cache runs in passthrough mode: every search goes to SerpApi, nothing crashes.
+- **Redis down?** The cache runs in passthrough mode: every search goes to SerpApi and the app keeps working.
   It tries to reconnect every 30 s, so caching resumes on its own.
 - **Credit budget.** With `DAILY_CREDIT_BUDGET` set (30 on the hosted app), SerpApi calls are counted
   per UTC day in Redis, so a restart doesn't reset the count. Cached answers are always served.
@@ -287,7 +277,7 @@ estimates (outside 0.5–2× the median) are not used.
 Apollo's Stamlo-5 15's costs ₹40 on the shelf and **₹133.22** delivered to 110001 (₹93.22 delivery below
 ₹199). Ranking by delivered price, not shelf price, changes which pharmacy wins.
 
-**Fees we can stand behind.** Every fee in `notes/postal_codes_delivery_rules.json` names its source: a
+**Where the fees come from.** Every fee in `notes/postal_codes_delivery_rules.json` names its source: a
 checkout cart (Apollo, PharmEasy, 1mg, Truemeds) or the shipping line on the pharmacy's Google product page
 (Netmeds, SastaSundar, Chemist180, Dawaa Dost, Medizinhub). Pharmacies whose fees we could not verify were
 removed rather than priced on a guess. Medplus does not publish a fee, so its listings show "fee not
@@ -310,7 +300,7 @@ whole composition group:
 
 - the salt + "tablet generic", which steers Google to discounted generics ("Atorvastatin 10mg tablet
   generic" found Torvason 10, which the plain salt search missed);
-- the brand with the largest family from the maker pharmacies discount hardest ("Paracip 650", not
+- the brand with the largest family from the maker pharmacies discount most ("Paracip 650", not
   the thin "Cipmol 650": 29 listings of 10 same-salt brands);
 - for single-salt medicines, the generic search with a pharmacy's name added ("Pantoprazole 40mg
   tablet generic" + the name found Pantopraz 40, which no other query returned).
@@ -341,9 +331,9 @@ main results arrived at **2.6 s**, generic alternatives at **5.2 s**, and all pr
 | Brand retry | 0–1 | Only when Google's answer to a brand has none of it ("Pan 40" → "Pan 40 tablet") |
 | Generic salt search | 1 | "Amlodipine 5mg tablet generic" for Stamlo 5 |
 | Pharmacy-named generic search | 0–1 | The same + a pharmacy's name (today `chemist180`); single-salt medicines only |
-| Discounted-generic brand | 0–1 | The largest-family brand of the salt from the maker pharmacies discount hardest ("Paracip 650"); a salt search without one gets the brand with the widest maker range |
+| Discounted-generic brand | 0–1 | The largest-family brand of the salt from the maker pharmacies discount most ("Paracip 650"); a salt search without one gets the brand with the widest maker range |
 | Product-page link, main list | 0–2 | The cheapest real match, only when links are on; once more if pooling changes which listing is cheapest |
-| Product-page link, alternatives | 0–1 | The cheapest alternative that beats the searched brand, only when links are on |
+| Product-page link, alternatives | 0–1 | The cheapest alternative that is cheaper than the searched brand, only when links are on |
 | Product page on click | 1 per listing | Any other listing, when its Visit site is clicked; then cached 24 h |
 | Gemini | 0 SerpApi credits | Only for misspellings with several possible readings, then cached |
 | A search without a strength ("paracetamol") | 0 | The user picks a strength first |
@@ -509,7 +499,7 @@ Design choices:
 - **Errors the model can act on.** A bad PIN or query, an unknown listing id, a busy server or a used-up budget
   come back as tool errors with a code (`invalid_pincode: ...`) before anything is spent. A search that fails
   halfway still returns what it found, marked "Search incomplete".
-- **Honest output.** A spelling correction is stated ("Read \"dollo 650\" as Dolo 650"), estimated pack sizes
+- **Clear output.** A spelling correction is stated ("Read \"dollo 650\" as Dolo 650"), estimated pack sizes
   are marked `~`, and swaps always carry "Same salt, strength and form. Ask a doctor or pharmacist before
   switching brands."
 - **Annotations and progress.** `cache_lab` and `cache_stats` are read-only. The searches are open-world,
