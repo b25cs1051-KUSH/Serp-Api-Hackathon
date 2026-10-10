@@ -460,7 +460,7 @@ browser `EventSource` can't read an HTTP error body.
 
 ---
 
-## Use it from Claude (MCP)
+## Any MCP-compatible AI application
 
 PharmaWatch is an [MCP](https://modelcontextprotocol.io) server, built on the official Python SDK, in two ways:
 
