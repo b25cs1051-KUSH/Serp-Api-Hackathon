@@ -10,7 +10,6 @@ venv/
 scripts/.refcache/
 
 .vscode/
-docs/
 tests/
 
 # Local Redis snapshots created by the recording guide's T1 command

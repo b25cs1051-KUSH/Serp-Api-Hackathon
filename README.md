@@ -92,8 +92,9 @@ The same flow end to end, from the browser or an AI client to one shared pipelin
    - the brand of the salt from a maker whose generics pharmacies discount most (a salt search
      without one gets the brand whose maker has the widest range).
 
-   When Google's answer to a brand has none of it, one more search adds the form word ("Pan 40
-   tablet", see [problem 7](#7-google-answered-some-brands-with-other-brands-only)).
+   When Google's answer to a brand has none of it, one more search adds the form word and,
+   for single-salt medicines, the strength unit from the catalogue ("Stamlo 5mg tablet", see
+   [problem 7](#7-google-answered-some-brands-with-other-brands-only)).
 4. **Pooling.** Every listing from every search is checked against **every** brand of the
    composition, so brands nobody searched for are compared too (see
    [problem 3](#3-a-brands-own-search-often-doesnt-return-that-brand)).
@@ -233,7 +234,10 @@ needs none of this.
 | `schemas.py` | `$ref` inlining for clients that don't resolve `$defs` |
 | `stdio.py` / `remote.py` | Local transport / Streamable HTTP at `/mcp` on the API (`MCP_ALLOWED_HOSTS` for Host checks) |
 
-**Codex CLI or IDE (local Windows setup):** Install `requirements.txt` into this project's `.venv`,
+<details>
+<summary>Codex CLI or IDE (local Windows setup)</summary>
+
+Install `requirements.txt` into this project's `.venv`,
 then register the same stdio server from PowerShell in the repo root. See the
 [Codex MCP configuration guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) for other platforms.
 
@@ -259,6 +263,8 @@ server with absolute paths, so register it again after moving the repo or rebuil
 Restart the Codex IDE extension or open a new Codex session, then check `codex mcp list` or `/mcp` in
 the Codex CLI. Ask “Use pharmawatch cache_stats to check Redis” for a zero-credit check, or ask
 “Use pharmawatch to find the cheapest delivered price for Stamlo 5 to PIN 110001” for a live search.
+
+</details>
 
 **MCP Inspector:**
 
@@ -541,7 +547,7 @@ main results arrived at **2.6 s**, generic alternatives at **5.2 s**, and all pr
 | Call | SerpApi credits | When |
 |---|---|---|
 | Main search | 1 | Always, unless cached (24 h; 1 h when Google returned fewer than 3 real listings) |
-| Brand retry | 0–1 | Only when Google's answer to a brand has none of it ("Pan 40" → "Pan 40 tablet") |
+| Brand retry | 0–1 | Only when Google's answer to a brand has none of it; add the form word and, for single-salt medicines, the catalogue strength unit ("Stamlo 5" → "Stamlo 5mg tablet") |
 | Generic salt search | 1 | "Amlodipine 5mg tablet generic" for Stamlo 5 |
 | Pharmacy-named generic search | 0–1 | The same + a pharmacy's name (today `chemist180`); single-salt medicines only |
 | Discounted-generic brand | 0–1 | The largest-family brand of the salt from the maker pharmacies discount most ("Paracip 650"); a salt search without one gets the brand with the widest maker range |
