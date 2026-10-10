@@ -177,6 +177,24 @@ def generic_query(salt_query: str, form: str) -> str:
     return f"{salt_query} tablet generic" if form == "tablet" else f"{salt_query} generic"
 
 
+def brand_retry_query(match: dict) -> str:
+    """Retry a missing brand with its catalogue strength unit and dosage form.
+
+    Google can interpret 'Stamlo 5 tablet' as a related-brand search; 'Stamlo
+    5mg tablet' returns the actual brand. Add a unit only for a single catalogue
+    strength already present in the brand name; never guess combination doses.
+    """
+    brand = match["matched_brand"]
+    strengths = re.findall(r"(?<![\d.])(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|iu)\b",
+                           match["salt_query"], re.IGNORECASE)
+    if len(strengths) == 1:
+        number, unit = strengths[0]
+        bare_strength = r"(?<![\w.])" + re.escape(number) + r"(?![\d.]|\s*(?:mg|mcg|g|ml|iu)\b)"
+        brand = re.sub(bare_strength, lambda m: m.group() + unit.lower(), brand, flags=re.IGNORECASE)
+    form = (match.get("form") or "tablet").split()[-1]
+    return f"{brand} {form}"
+
+
 def pick_candidates(match: dict, found: List[dict]) -> List[str]:
     """
     The 2 extra searches after the main one. Any search in the same salt widens the pool: Google lists
@@ -195,13 +213,12 @@ def pick_candidates(match: dict, found: List[dict]) -> List[str]:
     if "+" not in match["salt_query"]:
         searches.append(match["generic_query"] + " chemist180")
     # Google sometimes answers a short brand name with other brands only ("Pan 40 price": 24 listings,
-    # none of Pan 40; "Atorbest 10 price": Atorbest 20 only). With the form word it finds them
-    # ("Pan 40 tablet": 5 listings of Pan 40), so that search is added when the brand is missing.
+    # none of Pan 40; "Atorbest 10 price": Atorbest 20 only). Retry with an explicit strength unit
+    # from the catalogue and the form word ("Stamlo 5mg tablet"), when the brand is missing.
     if match["matched_as"] == "brand" and match["matched_brand"]:
         allow = allows_other_forms(match["matched_brand"], match["entry"])
         if not any(title_matches_brand(r.get("medicine_name", ""), match["matched_brand"], allow) for r in found):
-            form = (match.get("form") or "tablet").split()[-1]
-            searches.insert(0, f"{match['matched_brand']} {form}")
+            searches.insert(0, brand_retry_query(match))
     brand = generic_line_brand(match)
     if brand is None and match["matched_as"] == "salt":
         widest = max(match["group"], key=lambda g: (g.get("maker_products") or 0, -(g["unit_mrp"] or 1e9)), default=None)
